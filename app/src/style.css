@@ -1,0 +1,29 @@
+:root { --bg:#262421; --panel:#302e2c; --fg:#e8e6e3; --accent:#7fa650; --muted:#9a9894; }
+* { box-sizing: border-box; }
+html, body { margin:0; height:100%; background:var(--bg); color:var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans KR", sans-serif; }
+.layout { display:flex; gap:20px; padding:16px; max-width:1100px; margin:0 auto; align-items:flex-start; }
+.board-col { flex:1 1 auto; min-width:0; }
+.board-wrap { display:flex; gap:8px; }
+.board { width:min(calc(100vw - 400px), calc(100vh - 110px), 720px); aspect-ratio:1; flex:none; }
+.evalbar { width:16px; background:#222; border-radius:3px; overflow:hidden; position:relative; flex:none; }
+#evalFill { position:absolute; bottom:0; left:0; right:0; height:50%; background:#eee; transition:height .3s; }
+.status { margin-top:10px; min-height:1.4em; color:var(--muted); }
+.panel { width:300px; flex:none; background:var(--panel); border-radius:8px; padding:16px; }
+.panel h1 { margin:0 0 12px; font-size:22px; }
+.row { display:flex; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+.row label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted); flex:1; }
+select, button { background:#3d3a37; color:var(--fg); border:1px solid #555; border-radius:6px; padding:8px 10px; font:inherit; }
+button { cursor:pointer; flex:1 1 40%; } button:hover { background:#4a4642; }
+.info { font-size:12px; color:var(--muted); min-height:1.4em; margin-bottom:8px; }
+.moves { margin:0; padding:0; list-style:none; max-height:320px; overflow:auto; display:grid; grid-template-columns:36px 1fr 1fr; gap:2px 6px; font-size:14px; }
+.moves .n { color:var(--muted); }
+.promo { position:fixed; inset:0; background:#0008; display:flex; align-items:center; justify-content:center; }
+.promo[hidden] { display:none; }
+.promo .box { background:var(--panel); padding:14px; border-radius:10px; display:flex; gap:10px; }
+.promo button { font-size:34px; flex:none; width:64px; height:64px; padding:0; }
+@media (max-width: 760px) {
+  .layout { flex-direction:column; padding:8px; }
+  .panel { width:100%; }
+  .board { width:min(calc(100vw - 44px), 720px); }
+}
