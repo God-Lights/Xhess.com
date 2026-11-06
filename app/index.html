@@ -37,6 +37,13 @@
             <button id="flip">보드 뒤집기</button>
             <button id="copyPgn">PGN 복사</button>
           </div>
+          <div id="engineLabel" class="info"></div>
+          <div id="enginePicker" class="row picker" hidden>
+            <label>외부 UCI 엔진 경로 (비우면 기본 Stockfish)
+              <input id="enginePath" type="text" placeholder="예: C:\engines\albatross.exe" spellcheck="false" />
+            </label>
+            <button id="applyEngine">엔진 적용</button>
+          </div>
           <div id="info" class="info"></div>
           <ol id="moves" class="moves"></ol>
         </aside>

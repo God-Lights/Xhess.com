@@ -25,11 +25,20 @@ cd desktop && npm run build                   # 설치 파일 (nsis / deb / AppI
 
 ## 엔진
 
-UI 는 UCI 프로토콜(`app/src/engine/uci.ts`)로만 엔진과 통신한다. 현재는 Stockfish 19 lite
-(단일 스레드 WASM)를 Web Worker 로 실행한다. 이후 Albatross 가 같은 `Transport` 인터페이스로 교체된다.
+UI 는 UCI 프로토콜(`app/src/engine/uci.ts`)로만 엔진과 통신하고, 연결 방식은 `Transport` 로 분리돼 있다.
 
-> 라이선스 주의: Stockfish 는 GPL-3.0 이다. Stockfish 를 포함해 배포하는 빌드는 GPL-3.0 조건을
-> 따라야 한다. Albatross 로 교체하면 이 제약이 사라진다.
+| 환경 | 엔진 | 연결 |
+|---|---|---|
+| 데스크톱(Windows/Linux) | **로컬 네이티브 Stockfish 18** (멀티스레드, Hash 256MB) | Rust 가 프로세스를 띄워 stdin/stdout 을 Tauri 이벤트로 중계 (`desktop/src-tauri/src/engine.rs`) |
+| 데스크톱 + 사용자 지정 | 임의의 UCI 실행 파일 (예: Albatross) | 패널의 "외부 UCI 엔진 경로" 입력 |
+| 모바일/웹 | Stockfish WASM (단일 스레드 lite) | Web Worker |
+
+데스크톱에서 로컬 엔진이 실행되지 않으면(예: AVX2 미지원 CPU) 자동으로 WASM 엔진으로 대체된다.
+번들 엔진 바이너리는 저장소에 없고, 빌드할 때 `desktop/scripts/fetch-stockfish.mjs` 가 공식 릴리스를
+SHA-256 으로 검증해 내려받는다(`npm run fetch-engine`). 설치 파일 크기는 신경망 내장으로 100MB 안팎이다.
+
+> 라이선스: Stockfish 는 GPL-3.0 이다. 번들 시 라이선스 전문과 소스 위치를 함께 배포한다
+> (`THIRD_PARTY_NOTICES.md`). Albatross 로 교체하면 이 제약이 사라진다.
 
 ## Albatross 엔진 빌드
 

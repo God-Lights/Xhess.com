@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "메인 창: 엔진 이벤트 수신(core:event)과 앱 명령(engine_*) 호출",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
