@@ -7,6 +7,7 @@ import "./style.css";
 import { Game, type Color, type Key } from "./game";
 import { UciEngine, type SearchInfo } from "./engine/uci";
 import { createWorkerTransport, STOCKFISH_URL } from "./engine/workerTransport";
+import { createTauriTransport, isTauri } from "./engine/tauriTransport";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -16,7 +17,8 @@ let engineBusy = false;
 let engineReady = false;
 let epoch = 0; // 새 게임/무르기 시 진행 중이던 엔진 응답을 무시하기 위한 세대 번호
 
-const engine = new UciEngine(createWorkerTransport(STOCKFISH_URL));
+let engine: UciEngine | null = null;
+const PATH_KEY = "xhess.enginePath";
 
 const ground: Api = Chessground($("board"), {
   fen: game.fen,
@@ -112,7 +114,7 @@ async function engineTurn(): Promise<void> {
   const my = epoch;
   sync();
   const engineColor = game.turn;
-  const best = await engine.bestMove(null, game.uciMoves, { movetime: 800 }, (i) => {
+  const best = await engine!.bestMove(null, game.uciMoves, { movetime: 800 }, (i) => {
     if (my === epoch) showEval(i, engineColor);
   });
   if (my !== epoch) return; // 그 사이 새 게임/무르기가 일어남
@@ -123,7 +125,7 @@ async function engineTurn(): Promise<void> {
 
 async function resetEngineSearch(): Promise<void> {
   epoch++;
-  if (engineBusy) { engine.stop(); engineBusy = false; }
+  if (engineBusy) { engine?.stop(); engineBusy = false; }
 }
 
 async function newGame(): Promise<void> {
@@ -133,7 +135,7 @@ async function newGame(): Promise<void> {
   ground.set({ orientation: human });
   $("info").textContent = "";
   $("evalFill").style.height = "50%";
-  if (engineReady) await engine.newGame();
+  if (engineReady) await engine?.newGame();
   sync();
   void engineTurn();
 }
@@ -156,17 +158,82 @@ $<HTMLSelectElement>("side").onchange = () => void newGame();
 $<HTMLInputElement>("level").oninput = (e) => {
   const v = (e.target as HTMLInputElement).value;
   $("lvlOut").textContent = v;
-  if (engineReady) engine.setOption("Skill Level", v);
+  if (engineReady) engine?.setOption("Skill Level", v);
 };
 
-(async () => {
+function savedPath(): string {
+  try { return localStorage.getItem(PATH_KEY) ?? ""; } catch { return ""; }
+}
+function savePath(v: string): void {
+  try { localStorage.setItem(PATH_KEY, v); } catch { /* 저장 불가 환경은 무시 */ }
+}
+const baseName = (p: string) => p.split(/[\\/]/).pop() || p;
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise((res, rej) => {
+    const t = setTimeout(() => rej(new Error("응답 없음")), ms);
+    p.then((v) => { clearTimeout(t); res(v); }, (e) => { clearTimeout(t); rej(e); });
+  });
+}
+
+/** 데스크톱이면 로컬(네이티브) 엔진을, 아니거나 실패하면 WASM 엔진을 시작한다. */
+async function startEngine(): Promise<void> {
+  await resetEngineSearch();
+  engineReady = false;
+  engine?.quit();
+  engine = null;
   sync();
-  await engine.init();
+
+  let label = "";
+  let native = false;
+  if (isTauri()) {
+    let candidate: UciEngine | null = null;
+    try {
+      const t = await createTauriTransport(savedPath());
+      candidate = new UciEngine(t);
+      const mine = candidate;
+      t.onExit(() => {
+        if (engine === mine) { engineReady = false; engineBusy = false; setStatus("엔진 프로세스가 종료되었습니다. '엔진 적용'으로 다시 시작하세요."); }
+      });
+      await withTimeout(candidate.init(), 10000);
+      engine = candidate;
+      native = true;
+      label = /xhess-stockfish/i.test(t.path) ? "로컬 엔진 · Stockfish 18 (번들)" : `로컬 엔진 · ${baseName(t.path)}`;
+    } catch (e) {
+      candidate?.quit();
+      console.warn("native engine unavailable", e);
+      label = `WASM 엔진 (로컬 엔진 실패: ${e instanceof Error ? e.message : e})`;
+    }
+  }
+  if (!engine) {
+    engine = new UciEngine(createWorkerTransport(STOCKFISH_URL));
+    await engine.init();
+    if (!label) label = "WASM 엔진 (브라우저)";
+  }
+
+  if (native) {
+    engine.setOption("Threads", Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 2) - 1)));
+    engine.setOption("Hash", 256);
+  }
   engine.setOption("Skill Level", $<HTMLInputElement>("level").value);
+  await engine.ready();
+  $("engineLabel").textContent = label;
   engineReady = true;
   sync();
   void engineTurn();
-})().catch((e) => setStatus(`엔진 오류: ${e}`));
+}
+
+if (isTauri()) {
+  $("enginePicker").hidden = false;
+  $<HTMLInputElement>("enginePath").value = savedPath();
+  $("applyEngine").onclick = () => {
+    savePath($<HTMLInputElement>("enginePath").value.trim());
+    void startEngine().catch((e) => setStatus(`엔진 오류: ${e}`));
+  };
+}
+
+sync();
+startEngine().catch((e) => setStatus(`엔진 오류: ${e}`));
 
 // 테스트/디버깅용
 (window as unknown as { __xhess: unknown }).__xhess = { game };

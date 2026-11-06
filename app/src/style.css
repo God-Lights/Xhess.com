@@ -27,3 +27,7 @@ button { cursor:pointer; flex:1 1 40%; } button:hover { background:#4a4642; }
   .panel { width:100%; }
   .board { width:min(calc(100vw - 44px), 720px); }
 }
+.picker { flex-direction:column; align-items:stretch; }
+.picker button { flex:none; }
+.picker input { background:#3d3a37; color:var(--fg); border:1px solid #555; border-radius:6px; padding:8px 10px; font:inherit; width:100%; }
+.picker[hidden] { display:none; }

@@ -3,9 +3,11 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
+    "fetch-engine": "node scripts/fetch-stockfish.mjs",
     "tauri": "tauri",
-    "dev": "tauri dev",
-    "build": "tauri build"
+    "pretauri": "node scripts/fetch-stockfish.mjs",
+    "dev": "npm run fetch-engine && tauri dev",
+    "build": "npm run fetch-engine && tauri build"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.4"
