@@ -23,6 +23,10 @@ cd desktop && npm install && npm run dev      # 개발 창
 cd desktop && npm run build                   # 설치 파일 (nsis / deb / AppImage)
 ```
 
+## 전략 마킹
+
+엔진의 추천 수·예상 응수를 보드에 화살표로 보여 주고, 내가 오른쪽 클릭 드래그로 그린 계획을 엔진이 평가한다. 자세한 내용: `docs/strategy-marking.md`.
+
 ## 엔진
 
 UI 는 UCI 프로토콜(`app/src/engine/uci.ts`)로만 엔진과 통신하고, 연결 방식은 `Transport` 로 분리돼 있다.

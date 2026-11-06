@@ -84,6 +84,8 @@ private:
     std::uint64_t nodes_ = 0;
     int seldepth_ = 0;
     Move rootPrevBest_;
+    std::vector<Move> allowedRoot_;   // "searchmoves" restriction (empty = all legal moves)
+    std::vector<Move> excludedRoot_;  // best moves of the MultiPV lines already searched at this depth
 
     Move killers_[MAX_PLY + 2][2] = {};
     int history_[COLOR_NB][SQUARE_NB][SQUARE_NB] = {};
@@ -231,6 +233,10 @@ int Searcher::negamax(int depth, int alpha, int beta, int ply, bool allowNull) {
     ScoredMove moves[MAX_MOVES];
     int count = 0;
     for (Move m : list) {
+        if (root) {
+            if (!allowedRoot_.empty() && std::find(allowedRoot_.begin(), allowedRoot_.end(), m) == allowedRoot_.end()) continue;
+            if (std::find(excludedRoot_.begin(), excludedRoot_.end(), m) != excludedRoot_.end()) continue;
+        }
         int s = order_score(m, ttMove, ply);
         if (root && m == rootPrevBest_) s = 4'000'000;  // previous iteration's best move first
         moves[count++] = {m, s};
@@ -307,33 +313,58 @@ SearchResult Searcher::run() {
         }
         return result;
     }
-    result.best = rootMoves[0];  // fallback if even depth 1 is interrupted
+    // "searchmoves": keep only the legal moves from the list; ignore the restriction if none of them is legal.
+    for (Move m : limits_.searchMoves)
+        if (std::find(rootMoves.begin(), rootMoves.end(), m) != rootMoves.end()) allowedRoot_.push_back(m);
+    const int candidates = allowedRoot_.empty() ? int(rootMoves.size()) : int(allowedRoot_.size());
+    const int lineCount = std::clamp(limits_.multiPv, 1, std::max(1, candidates));
+    result.best = allowedRoot_.empty() ? rootMoves[0] : allowedRoot_[0];  // fallback if even depth 1 is interrupted
 
     constexpr int MaxDepth = MAX_PLY - 2;
     const int maxDepth = limits_.depth > 0 ? std::min(limits_.depth, MaxDepth) : MaxDepth;
+    std::vector<Move> prevBest(lineCount);
 
     for (int depth = 1; depth <= maxDepth; ++depth) {
         seldepth_ = 0;
-        const int score = negamax(depth, -INFINITE_SCORE, INFINITE_SCORE, 0, false);
-        if (stopped_) break;  // an interrupted iteration is incomplete: keep the previous result
+        std::vector<RootLine> lines;
+        excludedRoot_.clear();
+        bool complete = true;
+        for (int k = 0; k < lineCount; ++k) {
+            rootPrevBest_ = prevBest[k];
+            const int score = negamax(depth, -INFINITE_SCORE, INFINITE_SCORE, 0, false);
+            if (stopped_) {
+                complete = false;
+                break;
+            }
+            RootLine line;
+            line.score = score;
+            line.pv.assign(pv_[0], pv_[0] + pvLen_[0]);
+            excludedRoot_.push_back(line.pv[0]);  // the next line must start with a different move
+            lines.push_back(std::move(line));
+        }
+        if (!complete) break;  // an interrupted iteration is incomplete: keep the previous result
 
-        result.score = score;
+        for (int k = 0; k < lineCount; ++k) prevBest[k] = lines[k].pv[0];
+        result.score = lines[0].score;
         result.depth = depth;
-        result.best = pv_[0][0];
-        result.pv.assign(pv_[0], pv_[0] + pvLen_[0]);
+        result.best = lines[0].pv[0];
+        result.pv = lines[0].pv;
+        result.lines = lines;
         result.nodes = nodes_;
-        rootPrevBest_ = result.best;
 
         if (onInfo_) {
-            SearchInfo info;
-            info.depth = depth;
-            info.seldepth = seldepth_;
-            info.score = score;
-            info.nodes = nodes_;
-            info.timeMs = elapsed_ms();
-            info.hashfull = tt_.hashfull();
-            info.pv = result.pv;
-            onInfo_(info);
+            for (int k = 0; k < lineCount; ++k) {
+                SearchInfo info;
+                info.multipv = k + 1;
+                info.depth = depth;
+                info.seldepth = seldepth_;
+                info.score = lines[k].score;
+                info.nodes = nodes_;
+                info.timeMs = elapsed_ms();
+                info.hashfull = tt_.hashfull();
+                info.pv = lines[k].pv;
+                onInfo_(info);
+            }
         }
 
         // The next iteration usually takes at least as long as everything so far, so stop early

@@ -44,6 +44,16 @@
             </label>
             <button id="applyEngine">엔진 적용</button>
           </div>
+          <section class="marks">
+            <label class="check"><input id="marksOn" type="checkbox" checked /> 전략 마킹</label>
+            <div class="legend">
+              <span><i class="sw green"></i>추천 수</span><span><i class="sw red"></i>예상 응수</span>
+              <span><i class="sw blue"></i>대안 1</span><span><i class="sw yellow"></i>대안 2</span>
+            </div>
+            <p class="hint">평가값은 내 관점(+가 유리). 보드에서 <b>오른쪽 클릭 드래그</b>로 내 계획 화살표를 그리면 엔진이 평가합니다.</p>
+            <ol id="cands" class="cands"></ol>
+            <div id="planBox" class="plan" hidden></div>
+          </section>
           <div id="info" class="info"></div>
           <ol id="moves" class="moves"></ol>
         </aside>

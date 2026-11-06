@@ -1,6 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
+
+#include "../core/move.h"
 
 namespace albatross {
 
@@ -13,6 +16,8 @@ struct Limits {
     std::int64_t inc[2] = {0, 0};   // increment per color, ms
     int movestogo = 0;
     bool infinite = false;
+    std::vector<Move> searchMoves;  // "go searchmoves ...": only these root moves are considered (empty = all)
+    int multiPv = 1;                // UCI option MultiPV, copied here by the UCI layer
 };
 
 }  // namespace albatross

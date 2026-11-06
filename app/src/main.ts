@@ -8,6 +8,9 @@ import { Game, type Color, type Key } from "./game";
 import { UciEngine, type SearchInfo } from "./engine/uci";
 import { createWorkerTransport, STOCKFISH_URL } from "./engine/workerTransport";
 import { createTauriTransport, isTauri } from "./engine/tauriTransport";
+import type { DrawShape } from "chessground/draw";
+import { Analyzer } from "./analysis";
+import { buildPlanShapes, buildShapes, describeLines, planFromShapes, type PlanReport } from "./strategy";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -27,7 +30,105 @@ const ground: Api = Chessground($("board"), {
   animation: { duration: 180 },
   movable: { free: false, showDests: true, events: { after: (o, d) => onUserMove(o as Key, d as Key) } },
   draggable: { showGhost: true },
+  // 오른쪽 클릭 드래그로 그린 화살표 = "내 계획"
+  drawable: { enabled: true, onChange: (shapes) => onUserShapes(shapes) },
 });
+
+// ───────── 전략 마킹: 엔진 추천 화살표와 내 계획 평가 ─────────
+const MARKS_KEY = "xhess.marks";
+let marksOn = (() => { try { return localStorage.getItem(MARKS_KEY) !== "off"; } catch { return true; } })();
+let analysisFen: string | null = null;   // 지금 분석 중이거나 분석을 마친 국면
+let planActive = false;
+let planTimer: ReturnType<typeof setTimeout> | undefined;
+
+const analyzer = new Analyzer(
+  () => engine,
+  {
+    onLines(lines, fen) {
+      if (fen !== game.fen || !marksOn) return;
+      if (!planActive) ground.setAutoShapes(buildShapes(fen, lines));
+      renderCandidates(fen, lines);
+    },
+    onPlan(report, planInfo, bestInfo, fen) {
+      if (fen !== game.fen || !marksOn) return;
+      planActive = true;
+      ground.setAutoShapes(buildPlanShapes(fen, planInfo, bestInfo));
+      renderPlan(report);
+    },
+  },
+  { skillRestore: () => Number((document.getElementById("level") as HTMLInputElement).value) },
+);
+
+function renderCandidates(fen: string, lines: import("./engine/uci").SearchInfo[]): void {
+  const ol = $("cands");
+  ol.replaceChildren();
+  for (const c of describeLines(fen, lines)) {
+    const li = document.createElement("li");
+    const san = document.createElement("b"); san.textContent = c.san;
+    const sc = document.createElement("span"); sc.className = "score"; sc.textContent = c.score;
+    const cont = document.createElement("span"); cont.className = "cont"; cont.textContent = c.continuation.join(" ");
+    li.append(san, sc, cont);
+    ol.append(li);
+  }
+}
+
+function renderPlan(r: PlanReport): void {
+  const box = $("planBox");
+  box.replaceChildren();
+  const line = (cls: string, text: string) => { const d = document.createElement("div"); d.className = cls; d.textContent = text; return d; };
+  box.append(line(`v-${r.verdict}`, `내 계획 ${r.san} ${r.score} — ${r.verdictText}`));
+  box.append(line("sub", `엔진 최선 ${r.bestSan} ${r.bestScore}${r.loss > 0 ? ` (손해 ${(r.loss / 100).toFixed(2)})` : ""}`));
+  if (r.expectedReplySan) {
+    const match = r.replyMatches === undefined ? "" : r.replyMatches ? " · 내 예상과 일치" : " · 내 예상과 다름";
+    box.append(line("sub", `예상 응수 ${r.expectedReplySan}${match}${r.continuation.length > 1 ? ` → ${r.continuation.slice(1).join(" ")}` : ""}`));
+  }
+  box.hidden = false;
+}
+
+function clearMarksView(): void {
+  planActive = false;
+  clearTimeout(planTimer);
+  ground.setAutoShapes([]);
+  ground.setShapes([]);
+  $("cands").replaceChildren();
+  $("planBox").hidden = true;
+}
+
+/** 지금 분석해도 되는 상태인가: 내 차례, 엔진이 쉬는 중, 대국이 끝나지 않음 */
+function canAnalyze(): boolean {
+  return marksOn && engineReady && !engineBusy && game.turn === human && !game.outcome().over;
+}
+
+function refreshAnalysis(): void {
+  if (!canAnalyze()) {
+    if (analysisFen !== null) { analysisFen = null; void analyzer.cancel(); clearMarksView(); }
+    return;
+  }
+  if (analysisFen === game.fen) return;
+  analysisFen = game.fen;
+  clearMarksView();
+  void analyzer.recommend(game.uciMoves, game.fen);
+}
+
+function onUserShapes(shapes: DrawShape[]): void {
+  clearTimeout(planTimer);
+  if (!canAnalyze()) return;
+  const plan = planFromShapes(game.fen, shapes);
+  if (plan.moves.length === 0) {
+    if (planActive) { planActive = false; $("planBox").hidden = true; analysisFen = null; refreshAnalysis(); }
+    return;
+  }
+  // 화살표를 여러 개 연달아 그릴 때마다 평가하지 않도록 잠시 기다린다.
+  planTimer = setTimeout(() => void analyzer.evaluatePlan(game.uciMoves, game.fen, plan), 400);
+}
+
+$<HTMLInputElement>("marksOn").checked = marksOn;
+$<HTMLInputElement>("marksOn").onchange = (e) => {
+  marksOn = (e.target as HTMLInputElement).checked;
+  try { localStorage.setItem(MARKS_KEY, marksOn ? "on" : "off"); } catch { /* 저장 불가 환경은 무시 */ }
+  if (!marksOn) { analysisFen = null; void analyzer.cancel(); clearMarksView(); }
+  else sync();
+};
 
 function setStatus(t: string) { $("status").textContent = t; }
 
@@ -47,6 +148,7 @@ function sync(): void {
   else if (!engineReady) setStatus("엔진 로딩 중…");
   else if (engineBusy) setStatus("엔진이 생각 중…");
   else setStatus(game.turn === human ? "당신의 차례" : "");
+  refreshAnalysis();
 }
 
 function renderMoves(): void {
@@ -113,6 +215,8 @@ async function engineTurn(): Promise<void> {
   engineBusy = true;
   const my = epoch;
   sync();
+  await analyzer.cancel(); // 분석이 완전히 멈춘 뒤에만 엔진이 두도록 한다
+  if (my !== epoch) return;
   const engineColor = game.turn;
   const best = await engine!.bestMove(null, game.uciMoves, { movetime: 800 }, (i) => {
     if (my === epoch) showEval(i, engineColor);
@@ -125,6 +229,9 @@ async function engineTurn(): Promise<void> {
 
 async function resetEngineSearch(): Promise<void> {
   epoch++;
+  analysisFen = null;
+  await analyzer.cancel();
+  analyzer.forget();
   if (engineBusy) { engine?.stop(); engineBusy = false; }
 }
 
@@ -236,7 +343,7 @@ sync();
 startEngine().catch((e) => setStatus(`엔진 오류: ${e}`));
 
 // 테스트/디버깅용
-(window as unknown as { __xhess: unknown }).__xhess = { game };
+(window as unknown as { __xhess: unknown }).__xhess = { game, ground };
 
 // PWA: 웹(모바일 포함)에서만 서비스 워커 등록. Tauri 데스크톱에서는 불필요.
 if (import.meta.env.PROD && "serviceWorker" in navigator && !("__TAURI_INTERNALS__" in window)) {

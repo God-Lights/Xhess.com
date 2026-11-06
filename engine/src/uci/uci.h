@@ -23,7 +23,7 @@ public:
     // Returns false when the engine should quit.
     bool execute(const std::string& line, std::ostream& out);
 
-    static constexpr const char* NAME = "Albatross 0.3.0-deep-flight";
+    static constexpr const char* NAME = "Albatross 0.3.1-deep-flight";
     static constexpr const char* AUTHOR = "Xhess";
 
 private:
@@ -35,6 +35,7 @@ private:
 
     Position pos_;
     Search search_;
+    int multiPv_ = 1;
     std::ostream* out_ = nullptr;
     std::mutex outMutex_;
 };

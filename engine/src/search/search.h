@@ -22,6 +22,7 @@ constexpr bool is_mate_score(int score) { return score >= MATE_IN_MAX_PLY || sco
 
 // Progress report after every completed iteration.
 struct SearchInfo {
+    int multipv = 1;  // 1-based index of the line (MultiPV)
     int depth = 0;
     int seldepth = 0;
     int score = 0;  // centipawns or mate score, from the side to move
@@ -31,12 +32,19 @@ struct SearchInfo {
     std::vector<Move> pv;
 };
 
+// One principal variation of the root position (MultiPV: lines are ordered best first).
+struct RootLine {
+    int score = 0;
+    std::vector<Move> pv;
+};
+
 struct SearchResult {
     Move best;  // Move::none() only if the root position has no legal move
     int score = 0;
     int depth = 0;  // last completed iteration
     std::uint64_t nodes = 0;
     std::vector<Move> pv;
+    std::vector<RootLine> lines;  // all MultiPV lines of the last completed iteration (lines[0] is best/pv)
 };
 
 using InfoCallback = std::function<void(const SearchInfo&)>;

@@ -1,7 +1,10 @@
 #include "uci.h"
 
+#include <algorithm>
+#include <cstdlib>
 #include <iostream>
 #include <sstream>
+#include <vector>
 
 #include "../core/movegen.h"
 #include "../core/perft.h"
@@ -62,6 +65,7 @@ bool Uci::execute(const std::string& line, std::ostream& out) {
         emit(std::string("id name ") + NAME + "\nid author " + AUTHOR +
              "\noption name Hash type spin default 16 min 1 max 4096"
              "\noption name Clear Hash type button"
+             "\noption name MultiPV type spin default 1 min 1 max 32"
              "\nuciok");
     } else if (cmd == "isready") {
         emit("readyok");
@@ -110,6 +114,12 @@ void Uci::cmd_setoption(std::istream& args) {
         }
     } else if (name == "Clear Hash") {
         search_.clear_hash();
+    } else if (name == "MultiPV") {
+        try {
+            multiPv_ = std::clamp(int(std::stol(value)), 1, 32);
+        } catch (const std::exception&) {
+            emit("info string invalid MultiPV value: " + value);
+        }
     }
     // Other options (Threads, MultiPV, ...) arrive later; unknown names are ignored as the UCI spec asks.
 }
@@ -146,14 +156,22 @@ void Uci::cmd_position(std::istream& args) {
 
 void Uci::cmd_go(std::istream& args) {
     Limits limits;
+    limits.multiPv = multiPv_;
     bool any = false;
-    std::string token;
-    while (args >> token) {
-        auto num = [&args]() {
-            long long v = 0;
-            args >> v;
-            return v;
-        };
+
+    std::vector<std::string> tokens;
+    for (std::string t; args >> t;) tokens.push_back(t);
+    auto isKeyword = [](const std::string& t) {
+        static const char* keys[] = {"searchmoves", "ponder", "wtime", "btime", "winc", "binc", "movestogo", "depth",
+                                     "nodes", "mate", "movetime", "infinite", "perft"};
+        for (const char* k : keys)
+            if (t == k) return true;
+        return false;
+    };
+
+    for (std::size_t i = 0; i < tokens.size(); ++i) {
+        const std::string& token = tokens[i];
+        auto num = [&]() { return i + 1 < tokens.size() ? std::atoll(tokens[++i].c_str()) : 0LL; };
         if (token == "perft") {
             halt_search();
             std::ostringstream os;
@@ -163,7 +181,13 @@ void Uci::cmd_go(std::istream& args) {
             return;
         }
         any = true;
-        if (token == "depth") limits.depth = int(num());
+        if (token == "searchmoves") {
+            // The list runs until the next keyword. Moves that are not legal here are dropped by the search.
+            while (i + 1 < tokens.size() && !isKeyword(tokens[i + 1])) {
+                const Move m = parse_uci_move(pos_, tokens[++i]);
+                if (!m.is_none()) limits.searchMoves.push_back(m);
+            }
+        } else if (token == "depth") limits.depth = int(num());
         else if (token == "nodes") limits.nodes = std::uint64_t(num());
         else if (token == "movetime") limits.movetime = num();
         else if (token == "wtime") limits.time[WHITE] = num();
@@ -172,7 +196,7 @@ void Uci::cmd_go(std::istream& args) {
         else if (token == "binc") limits.inc[BLACK] = num();
         else if (token == "movestogo") limits.movestogo = int(num());
         else if (token == "infinite") limits.infinite = true;
-        // Unknown tokens (ponder, searchmoves, mate, ...) are skipped.
+        // Unknown tokens (ponder, mate, ...) are skipped.
     }
     if (!any) limits.infinite = true;  // plain "go" means search until "stop"
 
@@ -180,7 +204,8 @@ void Uci::cmd_go(std::istream& args) {
         pos_, limits,
         [this](const SearchInfo& i) {
             std::ostringstream os;
-            os << "info depth " << i.depth << " seldepth " << i.seldepth << " score " << format_score(i.score)
+            os << "info depth " << i.depth << " seldepth " << i.seldepth << " multipv " << i.multipv << " score "
+               << format_score(i.score)
                << " nodes " << i.nodes << " nps " << (i.timeMs > 0 ? i.nodes * 1000 / std::uint64_t(i.timeMs) : i.nodes)
                << " hashfull " << i.hashfull << " time " << i.timeMs << " pv";
             for (Move m : i.pv) os << ' ' << to_uci(m);
