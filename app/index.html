@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Xhess</title>
+  </head>
+  <body>
+    <div id="app">
+      <main class="layout">
+        <section class="board-col">
+          <div class="board-wrap">
+            <div class="evalbar" title="엔진 평가"><div id="evalFill"></div></div>
+            <div id="board" class="board"></div>
+          </div>
+          <div id="status" class="status">로딩 중…</div>
+        </section>
+        <aside class="panel">
+          <h1>Xhess</h1>
+          <div class="row">
+            <label>내 색
+              <select id="side"><option value="white">백</option><option value="black">흑</option></select>
+            </label>
+            <label>난이도 <output id="lvlOut">8</output>
+              <input id="level" type="range" min="0" max="20" value="8" />
+            </label>
+          </div>
+          <div class="row buttons">
+            <button id="newGame">새 게임</button>
+            <button id="undo">무르기</button>
+            <button id="flip">보드 뒤집기</button>
+            <button id="copyPgn">PGN 복사</button>
+          </div>
+          <div id="info" class="info"></div>
+          <ol id="moves" class="moves"></ol>
+        </aside>
+      </main>
+      <div id="promo" class="promo" hidden></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
