@@ -24,7 +24,7 @@ cd site && npm run build && npx wrangler pages deploy dist --project-name xhess
 ## 설치 파일 배포
 
 ```bash
-git tag v0.1.0 && git push origin v0.1.0     # release.yml 이 빌드 후 GitHub Release 생성
+git tag v0.1.0 && git push origin v0.1.0     # 또는 Actions → Release → Run workflow (tag 입력)
 ```
 
 사이트가 `releases/latest` 의 에셋 이름(`*x64-setup.exe`, `*_amd64.deb`, `*_amd64.AppImage`)으로
