@@ -31,7 +31,8 @@ describe("Game", () => {
 describe("UCI parsing", () => {
   it("info 라인", () => {
     const i = parseInfo("info depth 12 seldepth 18 multipv 1 score cp 34 nodes 1 pv e2e4 e7e5");
-    expect(i).toEqual({ depth: 12, cp: 34, pv: ["e2e4", "e7e5"] });
+    expect(i).toEqual({ multipv: 1, depth: 12, cp: 34, pv: ["e2e4", "e7e5"] });
+    expect(parseInfo("info depth 8 seldepth 11 multipv 3 score cp -12 nodes 5 pv g1f3")?.multipv).toBe(3);
     expect(parseInfo("info depth 3 score mate -2 pv a1a2")?.mate).toBe(-2);
     expect(parseInfo("info string hello")).toBeNull();
   });

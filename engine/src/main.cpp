@@ -46,12 +46,14 @@ int main(int argc, char** argv) {
         Limits limits;
         limits.depth = argc >= 3 ? std::stoi(argv[2]) : 6;
         std::atomic<bool> stop{false};
+        TranspositionTable tt(16);
         std::uint64_t total = 0;
         const auto t0 = std::chrono::steady_clock::now();
         for (const char* fen : Fens) {
             Position pos;
             pos.set(fen);
-            const SearchResult r = search_position(pos, limits, stop);
+            tt.clear();  // every position starts from an empty table so node counts stay deterministic
+            const SearchResult r = search_position(pos, limits, stop, tt);
             std::cout << to_uci(r.best) << " score " << format_score(r.score) << " nodes " << r.nodes << "  " << fen << '\n';
             total += r.nodes;
         }

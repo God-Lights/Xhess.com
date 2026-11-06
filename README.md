@@ -6,7 +6,7 @@
 app/       공통 웹 UI (TypeScript, Vite, chessground, chess.js)
 desktop/   Tauri 래퍼 (Windows / Linux)
 site/      Cloudflare Pages 설치 사이트 (OS 감지, /play/ 웹 앱)
-engine/    Albatross 자체 엔진 (C++20, CMake) — 0.2 First Thought: 탐색(alpha-beta)·평가(HCE)·UCI
+engine/    Albatross 자체 엔진 (C++20, CMake) — 0.3 Deep Flight: TT·PVS·LMR·Null-move 탐색, HCE 평가, UCI
 ```
 
 ## 개발
@@ -22,6 +22,14 @@ cd app && npm test                        # 단위 테스트
 cd desktop && npm install && npm run dev      # 개발 창
 cd desktop && npm run build                   # 설치 파일 (nsis / deb / AppImage)
 ```
+
+## 전략 마킹
+
+엔진의 추천 수·예상 응수를 보드에 화살표로 보여 주고, 내가 오른쪽 클릭 드래그로 그린 계획을 엔진이 평가한다. 자세한 내용: `docs/strategy-marking.md`.
+
+## 인간 모드
+
+엔진이 사람처럼 두는 모드: 가끔 차선을 고르고, 가끔 희생을 한다(탁월한 희생 `!!` 또는 블런더 `??`로 분류해 알려 준다). 자세한 내용: `docs/human-mode.md`.
 
 ## 엔진
 
@@ -48,9 +56,10 @@ ctest --test-dir engine/build            # 단위 테스트
 ./engine/build/albatross perft 6         # 시작 포지션 perft(6) = 119060324
 ```
 
-설계와 검증 결과: `engine/docs/0.1-genesis-design.md`, `engine/docs/0.2-first-thought.md`
+설계와 검증 결과: `engine/docs/0.1-genesis-design.md`, `engine/docs/0.2-first-thought.md`, `engine/docs/0.3-deep-flight.md`
 
 ```bash
 ./engine/build/albatross bench 6          # 고정 깊이 벤치 (노드 수는 결정적)
+python3 engine/tools/match.py --a <새 엔진> --b <기준 엔진> --games 200   # 엔진 간 대국으로 Elo 차이 측정
 # 앱에서 쓰기: 데스크톱 패널의 "외부 UCI 엔진 경로"에 albatross 실행 파일 경로 입력
 ```

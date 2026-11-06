@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Albatross VERSION 0.2.0 LANGUAGES CXX)
+project(Albatross VERSION 0.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -40,7 +40,9 @@ find_package(Threads REQUIRED)
 add_library(albatross_search STATIC
   src/search/movepick.cpp
   src/search/search.cpp
-  src/search/timeman.cpp)
+  src/search/see.cpp
+  src/search/timeman.cpp
+  src/search/tt.cpp)
 target_link_libraries(albatross_search PUBLIC albatross_core albatross_eval Threads::Threads)
 
 add_library(albatross_uci STATIC src/uci/uci.cpp)
@@ -56,6 +58,7 @@ if(ALBATROSS_BUILD_TESTS)
     tests/test_attacks.cpp
     tests/test_eval.cpp
     tests/test_search.cpp
+    tests/test_see_tt.cpp
     tests/test_position.cpp
     tests/test_movegen.cpp
     tests/test_perft.cpp

@@ -106,10 +106,10 @@ TEST(uci_reports_mate_and_stalemate_without_moves) {
         return out.str();
     };
     const std::string mate = reply("position startpos moves f2f3 e7e5 g2g4 d8h4\ngo depth 3\n");
-    CHECK(mate.find("info depth 0 seldepth 0 score mate 0 ") != std::string::npos);
+    CHECK(mate.find("info depth 0 seldepth 0 multipv 1 score mate 0 ") != std::string::npos);
     CHECK(mate.find("bestmove 0000") != std::string::npos);
     const std::string stale = reply("position fen 7k/5Q2/6K1/8/8/8/8/8 b - - 0 1\ngo depth 3\n");
-    CHECK(stale.find("info depth 0 seldepth 0 score cp 0 ") != std::string::npos);
+    CHECK(stale.find("info depth 0 seldepth 0 multipv 1 score cp 0 ") != std::string::npos);
     CHECK(stale.find("bestmove 0000") != std::string::npos);
 }
 
@@ -270,4 +270,113 @@ TEST(uci_score_formatting) {
     CHECK_EQ(format_score(MATE - 3), std::string("mate 2"));
     CHECK_EQ(format_score(-(MATE - 4)), std::string("mate -2"));
     CHECK_EQ(format_score(-MATE), std::string("mate 0"));
+}
+
+// ---- MultiPV and searchmoves (the basis of the strategy markings in the app) ----
+
+TEST(multipv_returns_distinct_ordered_lines) {
+    Position p;
+    Limits l;
+    l.depth = 5;
+    l.multiPv = 3;
+    std::atomic<bool> stop{false};
+    const SearchResult r = search_position(p, l, stop);
+    CHECK_EQ(r.lines.size(), std::size_t(3));
+    CHECK(r.lines[0].pv[0] == r.best);
+    CHECK_EQ(r.score, r.lines[0].score);
+    for (std::size_t i = 0; i < r.lines.size(); ++i) {
+        CHECK(!r.lines[i].pv.empty());
+        for (std::size_t j = 0; j < i; ++j) CHECK(!(r.lines[i].pv[0] == r.lines[j].pv[0]));  // distinct first moves
+        if (i > 0) CHECK(r.lines[i].score <= r.lines[i - 1].score);                              // best first
+    }
+    // Every line is a legal sequence from the root.
+    for (const RootLine& line : r.lines) {
+        Position q;
+        for (Move m : line.pv) {
+            const Move legal = parse_uci_move(q, to_uci(m));
+            CHECK(!legal.is_none());
+            if (legal.is_none()) break;
+            q.do_move(legal);
+        }
+    }
+}
+
+TEST(multipv_is_limited_by_the_number_of_legal_moves) {
+    // White king in the corner with two legal moves only.
+    const char* fen = "7k/8/8/8/8/8/6q1/7K w - - 0 1";
+    Position p;
+    CHECK(p.set(fen));
+    MoveList legal;
+    generate_legal(p, legal);
+    Limits l;
+    l.depth = 3;
+    l.multiPv = 10;
+    std::atomic<bool> stop{false};
+    const SearchResult r = search_position(p, l, stop);
+    CHECK_EQ(r.lines.size(), legal.size());
+}
+
+TEST(multipv_one_matches_the_plain_search) {
+    Position p;
+    CHECK(p.set("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"));
+    Limits a, b;
+    a.depth = b.depth = 6;
+    b.multiPv = 1;
+    std::atomic<bool> stop{false};
+    const SearchResult ra = search_position(p, a, stop);
+    const SearchResult rb = search_position(p, b, stop);
+    CHECK(ra.best == rb.best);
+    CHECK_EQ(ra.nodes, rb.nodes);
+    CHECK_EQ(ra.lines.size(), std::size_t(1));
+}
+
+TEST(searchmoves_restricts_the_root) {
+    const char* fen = Position::START_FEN;
+    Position p;
+    CHECK(p.set(fen));
+    Limits l;
+    l.depth = 4;
+    l.searchMoves = {parse_uci_move(p, "a2a3")};  // clearly not the best move, but the only one allowed
+    std::atomic<bool> stop{false};
+    const SearchResult r = search_position(p, l, stop);
+    CHECK_EQ(to_uci(r.best), std::string("a2a3"));
+    CHECK(!r.pv.empty());
+
+    // Two allowed moves with MultiPV 2: both are reported, best first.
+    l.searchMoves = {parse_uci_move(p, "a2a3"), parse_uci_move(p, "e2e4")};
+    l.multiPv = 2;
+    const SearchResult r2 = search_position(p, l, stop);
+    CHECK_EQ(r2.lines.size(), std::size_t(2));
+    CHECK_EQ(to_uci(r2.lines[0].pv[0]), std::string("e2e4"));
+    CHECK_EQ(to_uci(r2.lines[1].pv[0]), std::string("a2a3"));
+}
+
+TEST(uci_multipv_and_searchmoves) {
+    auto run = [](const char* script) {
+        Uci uci;
+        std::istringstream in(script);
+        std::ostringstream out;
+        uci.loop(in, out);
+        return out.str();
+    };
+    CHECK(run("uci\n").find("option name MultiPV type spin default 1 min 1 max 32") != std::string::npos);
+
+    const std::string multi = run("setoption name MultiPV value 3\nposition startpos\ngo depth 4\n");
+    CHECK(multi.find(" multipv 1 ") != std::string::npos);
+    CHECK(multi.find(" multipv 2 ") != std::string::npos);
+    CHECK(multi.find(" multipv 3 ") != std::string::npos);
+    CHECK(multi.find(" multipv 4 ") == std::string::npos);
+
+    // searchmoves: the list ends at the next keyword; illegal entries are ignored.
+    const std::string sm = run("position startpos\ngo searchmoves a2a3 h2h3 e2e5 depth 3\n");
+    const std::size_t pos = sm.find("bestmove ");
+    CHECK(pos != std::string::npos);
+    const std::string best = sm.substr(pos + 9, 4);
+    CHECK(best == "a2a3" || best == "h2h3");
+
+    CHECK(run("setoption name MultiPV value abc\n").find("invalid MultiPV value") != std::string::npos);
+    // An out-of-range value is clamped instead of rejected.
+    const std::string big = run("setoption name MultiPV value 500\nposition startpos\ngo depth 2\n");
+    CHECK(big.find(" multipv 20 ") != std::string::npos);
+    CHECK(big.find(" multipv 21 ") == std::string::npos);  // start position has 20 legal moves
 }

@@ -9,6 +9,7 @@
 #include "../core/move.h"
 #include "../core/position.h"
 #include "limits.h"
+#include "tt.h"
 
 namespace albatross {
 
@@ -21,11 +22,19 @@ constexpr bool is_mate_score(int score) { return score >= MATE_IN_MAX_PLY || sco
 
 // Progress report after every completed iteration.
 struct SearchInfo {
+    int multipv = 1;  // 1-based index of the line (MultiPV)
     int depth = 0;
     int seldepth = 0;
     int score = 0;  // centipawns or mate score, from the side to move
     std::uint64_t nodes = 0;
     std::int64_t timeMs = 0;
+    int hashfull = 0;  // per mille
+    std::vector<Move> pv;
+};
+
+// One principal variation of the root position (MultiPV: lines are ordered best first).
+struct RootLine {
+    int score = 0;
     std::vector<Move> pv;
 };
 
@@ -35,12 +44,18 @@ struct SearchResult {
     int depth = 0;  // last completed iteration
     std::uint64_t nodes = 0;
     std::vector<Move> pv;
+    std::vector<RootLine> lines;  // all MultiPV lines of the last completed iteration (lines[0] is best/pv)
 };
 
 using InfoCallback = std::function<void(const SearchInfo&)>;
 using BestMoveCallback = std::function<void(const SearchResult&)>;
 
 // Synchronous alpha-beta search with iterative deepening. `stop` can be raised from another thread.
+// The transposition table is shared between searches by the caller.
+SearchResult search_position(Position pos, const Limits& limits, std::atomic<bool>& stop, TranspositionTable& tt,
+                             const InfoCallback& onInfo = {});
+
+// Convenience overload with a private 8 MB table (tests, one-off searches).
 SearchResult search_position(Position pos, const Limits& limits, std::atomic<bool>& stop,
                              const InfoCallback& onInfo = {});
 
@@ -57,7 +72,13 @@ public:
     void wait();  // block until the search thread has finished
     bool infinite() const { return infinite_; }
 
+    // Only call while no search is running.
+    void set_hash_mb(std::size_t megabytes) { tt_.resize(megabytes); }
+    void clear_hash() { tt_.clear(); }
+    TranspositionTable& tt() { return tt_; }
+
 private:
+    TranspositionTable tt_{16};
     std::atomic<bool> stop_{false};
     std::thread thread_;
     bool infinite_ = false;

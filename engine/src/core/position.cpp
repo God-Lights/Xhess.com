@@ -381,6 +381,30 @@ void Position::undo_move() {
     else if (m.is_capture()) put_piece(s.captured, to);
 }
 
+void Position::do_null_move() {
+    StateInfo ns = st_.back();
+    ns.move = Move::none();
+    ns.captured = NO_PIECE;
+    Key k = ns.key;
+    if (ns.ep != SQ_NONE) {
+        if (ep_capturable(stm_, ns.ep)) k ^= Zobrist::enpassant[file_of(ns.ep)];
+        ns.ep = SQ_NONE;
+    }
+    k ^= Zobrist::side;
+    ns.key = k;
+    ns.checkers = 0;  // legal only when the mover is not in check, and passing cannot attack the opponent's king
+    ++ns.rule50;
+    stm_ = ~stm_;
+    ++gamePly_;
+    st_.push_back(ns);
+}
+
+void Position::undo_null_move() {
+    st_.pop_back();
+    stm_ = ~stm_;
+    --gamePly_;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Draw detection
 // ---------------------------------------------------------------------------------------------

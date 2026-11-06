@@ -8,6 +8,8 @@ export interface Transport {
 }
 
 export interface SearchInfo {
+  /** MultiPV 라인 번호(1부터). MultiPV 를 쓰지 않는 엔진은 항상 1 */
+  multipv: number;
   depth: number;
   /** 엔진(수를 두는 쪽) 관점의 centipawn */
   cp?: number;
@@ -21,12 +23,30 @@ export interface GoOptions {
   depth?: number;
 }
 
+export interface AnalysisOptions {
+  /** 동시에 보고 싶은 후보 수(라인) 개수 */
+  multiPv: number;
+  /** 지정하면 이 수들만 평가한다(UCI searchmoves) */
+  searchMoves?: string[];
+  movetime: number;
+  /** 분석 중에는 약화 설정(Skill Level)을 풀고 끝나면 restore 값으로 되돌린다 */
+  skill?: { analysis: number; restore: number };
+}
+
+export interface AnalysisHandle {
+  /** 탐색이 끝나고(옵션 복원까지) 엔진이 다시 쓸 수 있게 되면 이행된다 */
+  done: Promise<void>;
+  /** 탐색을 멈추고 done 을 기다린다 */
+  stop(): Promise<void>;
+}
+
 export function parseInfo(line: string): SearchInfo | null {
   if (!line.startsWith("info ") || !line.includes(" score ")) return null;
   const t = line.split(/\s+/);
-  const out: SearchInfo = { depth: 0, pv: [] };
+  const out: SearchInfo = { multipv: 1, depth: 0, pv: [] };
   for (let i = 1; i < t.length; i++) {
     if (t[i] === "depth") out.depth = Number(t[++i]);
+    else if (t[i] === "multipv") out.multipv = Number(t[++i]);
     else if (t[i] === "score") {
       const kind = t[++i];
       const val = Number(t[++i]);
@@ -102,6 +122,39 @@ export class UciEngine {
     const line = await done;
     this.infoCb = null;
     return parseBestMove(line);
+  }
+
+  /**
+   * 후보 수 여러 개(MultiPV)를 분석한다. 진행 중에는 onInfo 가 라인별로 계속 호출된다.
+   * 대국용 bestMove() 와 동시에 쓸 수 없으므로, 끝났거나 stop() 으로 멈춘 뒤에 다른 명령을 보낸다.
+   */
+  analyze(
+    startFen: string | null,
+    moves: string[],
+    opt: AnalysisOptions,
+    onInfo: (i: SearchInfo) => void,
+  ): AnalysisHandle {
+    this.infoCb = onInfo;
+    this.setOption("MultiPV", opt.multiPv);
+    if (opt.skill) this.setOption("Skill Level", opt.skill.analysis);
+    const base = startFen ? `fen ${startFen}` : "startpos";
+    this.t.send(`position ${base}${moves.length ? " moves " + moves.join(" ") : ""}`);
+    const bestmove = this.waitFor((l) => l.startsWith("bestmove"));
+    // searchmoves 는 반드시 마지막에 둔다: Stockfish 는 그 뒤의 토큰을 전부 수 목록으로 읽어 movetime 이 무시된다.
+    const sm = opt.searchMoves?.length ? ` searchmoves ${opt.searchMoves.join(" ")}` : "";
+    this.t.send(`go movetime ${opt.movetime}${sm}`);
+    const done = bestmove.then(() => {
+      this.infoCb = null;
+      this.setOption("MultiPV", 1);
+      if (opt.skill) this.setOption("Skill Level", opt.skill.restore);
+    });
+    return {
+      done,
+      stop: () => {
+        this.t.send("stop");
+        return done;
+      },
+    };
   }
 
   stop(): void {
