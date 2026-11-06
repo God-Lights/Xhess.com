@@ -43,3 +43,9 @@ button { cursor:pointer; flex:1 1 40%; } button:hover { background:#4a4642; }
 .plan[hidden] { display:none; }
 .plan .v-best, .plan .v-good { color:#9ccc65; } .plan .v-inaccuracy { color:#ffca28; } .plan .v-mistake, .plan .v-blunder { color:#ef5350; }
 .plan .sub { color:var(--muted); }
+.human-note { margin:0 0 10px; padding:8px 10px; border-radius:6px; background:#3a3835; font-size:13px; line-height:1.5; border-left:4px solid #888; }
+.human-note[hidden] { display:none; }
+.human-note.t-brilliant, .human-note.t-gambit { border-color:#26c6da; } .human-note.t-brilliant b, .human-note.t-gambit b { color:#26c6da; }
+.human-note.t-speculative { border-color:#ffca28; } .human-note.t-speculative b { color:#ffca28; }
+.human-note.t-blunder, .human-note.t-mistake { border-color:#ef5350; } .human-note.t-blunder b, .human-note.t-mistake b { color:#ef5350; }
+.human-note .sub { color:var(--muted); }

@@ -11,6 +11,8 @@ import { createTauriTransport, isTauri } from "./engine/tauriTransport";
 import type { DrawShape } from "chessground/draw";
 import { Analyzer } from "./analysis";
 import { buildPlanShapes, buildShapes, describeLines, planFromShapes, type PlanReport } from "./strategy";
+import { DEFAULT_PARAMS, type HumanParams } from "./humanmode";
+import { pickHumanMove, type HumanChoice } from "./humanplay";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -58,6 +60,53 @@ const analyzer = new Analyzer(
   },
   { skillRestore: () => Number((document.getElementById("level") as HTMLInputElement).value) },
 );
+
+// ───────── 인간 모드: 희생(탁월 또는 블런더)과 실수를 섞어 두는 엔진 ─────────
+const HUMAN_KEY = "xhess.human";
+type EngineMode = "best" | "human";
+let engineMode: EngineMode = "best";
+const humanParams: HumanParams = { ...DEFAULT_PARAMS };
+try {
+  const saved = JSON.parse(localStorage.getItem(HUMAN_KEY) ?? "null");
+  if (saved) {
+    if (saved.mode === "human") engineMode = "human";
+    if (typeof saved.humanness === "number") humanParams.humanness = saved.humanness;
+    if (typeof saved.boldness === "number") humanParams.boldness = saved.boldness;
+  }
+} catch { /* 저장 불가·손상된 값은 기본값 사용 */ }
+
+function saveHuman(): void {
+  try { localStorage.setItem(HUMAN_KEY, JSON.stringify({ mode: engineMode, ...humanParams })); } catch { /* 무시 */ }
+}
+
+function showHumanNote(c: HumanChoice | null): void {
+  const box = $("humanNote");
+  box.replaceChildren();
+  if (!c || c.report.tag === "normal") { box.hidden = true; return; }
+  const r = c.report;
+  box.className = `human-note t-${r.tag}`;
+  const head = document.createElement("div");
+  const b = document.createElement("b");
+  b.textContent = `${c.entry.san}${r.symbol}`;
+  head.append(b, ` — ${r.text}`);
+  const sub = document.createElement("div");
+  sub.className = "sub";
+  const lossText = r.loss > 0 ? `엔진 최선(${c.best.san})보다 ${(r.loss / 100).toFixed(2)} 불리` : "엔진 최선과 같은 평가";
+  sub.textContent = r.sacrifice ? `${lossText} · 물질 ${(r.sacrifice.swing / 100).toFixed(1)}` : lossText;
+  box.append(head, sub);
+  box.hidden = false;
+}
+
+function applyEngineModeUi(): void {
+  $<HTMLSelectElement>("engineMode").value = engineMode;
+  $("humanOpts").hidden = engineMode !== "human";
+  $<HTMLInputElement>("level").disabled = engineMode === "human"; // 인간 모드는 난이도 슬라이더 대신 실수 빈도를 쓴다
+  $<HTMLInputElement>("humanness").value = String(Math.round(humanParams.humanness * 100));
+  $<HTMLInputElement>("boldness").value = String(Math.round(humanParams.boldness * 100));
+  $("humanOut").textContent = String(Math.round(humanParams.humanness * 100));
+  $("boldOut").textContent = String(Math.round(humanParams.boldness * 100));
+  if (engineMode !== "human") showHumanNote(null);
+}
 
 function renderCandidates(fen: string, lines: import("./engine/uci").SearchInfo[]): void {
   const ol = $("cands");
@@ -174,6 +223,7 @@ function onUserMove(from: Key, to: Key): void {
 }
 
 function afterMove(): void {
+  showHumanNote(null);
   sync();
   void engineTurn();
 }
@@ -218,12 +268,26 @@ async function engineTurn(): Promise<void> {
   await analyzer.cancel(); // 분석이 완전히 멈춘 뒤에만 엔진이 두도록 한다
   if (my !== epoch) return;
   const engineColor = game.turn;
-  const best = await engine!.bestMove(null, game.uciMoves, { movetime: 800 }, (i) => {
-    if (my === epoch) showEval(i, engineColor);
-  });
+  let best: string | null;
+  let humanChoice: HumanChoice | null = null;
+  if (engineMode === "human") {
+    humanChoice = await pickHumanMove(engine!, game.uciMoves, game.fen, humanParams, {
+      skillRestore: () => Number((document.getElementById("level") as HTMLInputElement).value),
+      cancelled: () => my !== epoch,
+      onBest: (i) => { if (my === epoch) showEval(i, engineColor); },
+    });
+    if (my !== epoch) return;
+    // 후보를 얻지 못했으면(예: 엔진 오류) 표준 탐색으로 대신 둔다
+    best = humanChoice ? humanChoice.entry.uci : await engine!.bestMove(null, game.uciMoves, { movetime: 800 });
+  } else {
+    best = await engine!.bestMove(null, game.uciMoves, { movetime: 800 }, (i) => {
+      if (my === epoch) showEval(i, engineColor);
+    });
+  }
   if (my !== epoch) return; // 그 사이 새 게임/무르기가 일어남
   engineBusy = false;
   if (best) game.moveUci(best);
+  showHumanNote(humanChoice);
   sync();
 }
 
@@ -241,6 +305,7 @@ async function newGame(): Promise<void> {
   human = $<HTMLSelectElement>("side").value as Color;
   ground.set({ orientation: human });
   $("info").textContent = "";
+  showHumanNote(null);
   $("evalFill").style.height = "50%";
   if (engineReady) await engine?.newGame();
   sync();
@@ -342,8 +407,40 @@ if (isTauri()) {
 sync();
 startEngine().catch((e) => setStatus(`엔진 오류: ${e}`));
 
+$<HTMLSelectElement>("engineMode").onchange = (e) => {
+  engineMode = (e.target as HTMLSelectElement).value as EngineMode;
+  saveHuman();
+  applyEngineModeUi();
+};
+$<HTMLInputElement>("humanness").oninput = (e) => {
+  humanParams.humanness = Number((e.target as HTMLInputElement).value) / 100;
+  $("humanOut").textContent = String(Math.round(humanParams.humanness * 100));
+  saveHuman();
+};
+$<HTMLInputElement>("boldness").oninput = (e) => {
+  humanParams.boldness = Number((e.target as HTMLInputElement).value) / 100;
+  $("boldOut").textContent = String(Math.round(humanParams.boldness * 100));
+  saveHuman();
+};
+applyEngineModeUi();
+
 // 테스트/디버깅용
-(window as unknown as { __xhess: unknown }).__xhess = { game, ground };
+(window as unknown as { __xhess: unknown }).__xhess = {
+  game,
+  ground,
+  // 테스트용: 주어진 수순의 국면에서 내 색을 정해 시작한다(엔진 차례면 바로 둔다)
+  async setPosition(moves: string[], side: Color) {
+    await resetEngineSearch();
+    game.reset();
+    for (const mv of moves) game.moveUci(mv);
+    human = side;
+    $<HTMLSelectElement>("side").value = side;
+    ground.set({ orientation: side });
+    showHumanNote(null);
+    sync();
+    void engineTurn();
+  },
+};
 
 // PWA: 웹(모바일 포함)에서만 서비스 워커 등록. Tauri 데스크톱에서는 불필요.
 if (import.meta.env.PROD && "serviceWorker" in navigator && !("__TAURI_INTERNALS__" in window)) {

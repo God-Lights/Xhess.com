@@ -31,6 +31,23 @@
               <input id="level" type="range" min="0" max="20" value="8" />
             </label>
           </div>
+          <div class="row">
+            <label>엔진 모드
+              <select id="engineMode">
+                <option value="best">표준 (최선수)</option>
+                <option value="human">인간 모드 (희생·실수)</option>
+              </select>
+            </label>
+          </div>
+          <div id="humanOpts" class="row" hidden>
+            <label>실수 빈도 <output id="humanOut">40</output>
+              <input id="humanness" type="range" min="0" max="100" value="40" />
+            </label>
+            <label>희생 성향 <output id="boldOut">50</output>
+              <input id="boldness" type="range" min="0" max="100" value="50" />
+            </label>
+          </div>
+          <div id="humanNote" class="human-note" hidden></div>
           <div class="row buttons">
             <button id="newGame">새 게임</button>
             <button id="undo">무르기</button>
