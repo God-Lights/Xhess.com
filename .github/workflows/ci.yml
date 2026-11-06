@@ -5,6 +5,18 @@ on:
   pull_request:
 
 jobs:
+  engine:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S engine -B engine/build -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build engine/build --config Release
+      - run: ctest --test-dir engine/build -C Release --output-on-failure
+
   web:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: app } }
