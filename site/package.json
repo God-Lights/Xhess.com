@@ -1,0 +1,8 @@
+{
+  "name": "xhess-site",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix ../app ci && npm --prefix ../app run build && node build.mjs",
+    "preview": "npx wrangler pages dev dist"
+  }
+}

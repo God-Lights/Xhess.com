@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Xhess — 체스</title>
+  <meta name="description" content="Xhess 체스: Windows·Linux 프로그램 다운로드, 아이폰·안드로이드는 웹에서 바로 설치" />
+  <meta name="theme-color" content="#262421" />
+  <link rel="icon" href="favicon.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="hero">
+    <img src="logo.png" alt="" width="96" height="96" />
+    <h1>Xhess</h1>
+    <p class="tag">어디서나 두는 체스. PC에서는 프로그램으로, 모바일에서는 웹으로.</p>
+  </header>
+
+  <main>
+    <section class="card primary" id="primary">
+      <h2 id="primaryTitle">다운로드</h2>
+      <p id="primaryDesc" class="muted">사용 중인 기기를 확인하는 중…</p>
+      <div id="primaryActions" class="actions"></div>
+      <p class="muted small" id="versionLine"></p>
+    </section>
+
+    <section class="grid">
+      <article class="card" id="win">
+        <h3>Windows</h3>
+        <p class="muted">Windows 10 이상 · 64비트</p>
+        <div class="actions" data-slot="win"></div>
+      </article>
+      <article class="card" id="linux">
+        <h3>Linux</h3>
+        <p class="muted">Debian/Ubuntu(.deb) 또는 AppImage</p>
+        <div class="actions" data-slot="linux"></div>
+      </article>
+      <article class="card" id="mobile">
+        <h3>아이폰 · 안드로이드</h3>
+        <p class="muted">설치 없이 웹에서 바로 실행하고, 홈 화면에 추가하면 앱처럼 동작합니다.</p>
+        <div class="actions"><a class="btn" href="play/">웹에서 플레이</a></div>
+        <details>
+          <summary>홈 화면에 추가하는 방법</summary>
+          <ul>
+            <li><b>아이폰(Safari)</b>: 공유 버튼 → <em>홈 화면에 추가</em></li>
+            <li><b>안드로이드(Chrome)</b>: 메뉴(⋮) → <em>앱 설치</em> 또는 <em>홈 화면에 추가</em></li>
+          </ul>
+        </details>
+      </article>
+    </section>
+  </main>
+
+  <footer>
+    <p class="muted small">
+      <a href="https://github.com/god-lights/xhess.com" rel="noopener">GitHub</a> ·
+      <a href="https://github.com/god-lights/xhess.com/releases" rel="noopener">모든 버전</a>
+    </p>
+    <p class="muted small">엔진: Stockfish (GPL-3.0). 자체 엔진 Albatross 로 교체 예정.</p>
+  </footer>
+  <script src="main.js"></script>
+</body>
+</html>

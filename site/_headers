@@ -1,0 +1,9 @@
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/play/sw.js
+  Cache-Control: no-cache
+
+/play/*.wasm
+  Content-Type: application/wasm

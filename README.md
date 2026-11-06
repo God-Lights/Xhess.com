@@ -5,6 +5,7 @@
 ```
 app/       공통 웹 UI (TypeScript, Vite, chessground, chess.js)
 desktop/   Tauri 래퍼 (Windows / Linux)
+site/      Cloudflare Pages 설치 사이트 (OS 감지, /play/ 웹 앱)
 engine/    Albatross 자체 엔진 (C++20) — 예정
 ```
 

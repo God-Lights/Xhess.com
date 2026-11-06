@@ -170,3 +170,8 @@ $<HTMLInputElement>("level").oninput = (e) => {
 
 // 테스트/디버깅용
 (window as unknown as { __xhess: unknown }).__xhess = { game };
+
+// PWA: 웹(모바일 포함)에서만 서비스 워커 등록. Tauri 데스크톱에서는 불필요.
+if (import.meta.env.PROD && "serviceWorker" in navigator && !("__TAURI_INTERNALS__" in window)) {
+  navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {});
+}
