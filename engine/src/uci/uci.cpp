@@ -17,6 +17,16 @@ std::string format_score(int score) {
     return "cp " + std::to_string(score);
 }
 
+std::string game_status(const Position& pos) {
+    MoveList moves;
+    generate_legal(pos, moves);
+    if (moves.empty()) return pos.in_check() ? "checkmate" : "stalemate";
+    if (pos.insufficient_material()) return "draw_insufficient";
+    if (pos.is_fifty_move_draw()) return "draw_fifty";
+    if (pos.repetition_count() >= 3) return "draw_repetition";
+    return "ongoing";
+}
+
 Uci::~Uci() { halt_search(); }
 
 void Uci::emit(const std::string& line) {
@@ -49,11 +59,15 @@ bool Uci::execute(const std::string& line, std::ostream& out) {
     if (!(is >> cmd)) return true;
 
     if (cmd == "uci") {
-        emit(std::string("id name ") + NAME + "\nid author " + AUTHOR + "\nuciok");
+        emit(std::string("id name ") + NAME + "\nid author " + AUTHOR +
+             "\noption name Hash type spin default 16 min 1 max 4096"
+             "\noption name Clear Hash type button"
+             "\nuciok");
     } else if (cmd == "isready") {
         emit("readyok");
     } else if (cmd == "ucinewgame") {
         halt_search();
+        search_.clear_hash();
         pos_.set(Position::START_FEN);
     } else if (cmd == "position") {
         halt_search();
@@ -63,9 +77,13 @@ bool Uci::execute(const std::string& line, std::ostream& out) {
     } else if (cmd == "stop") {
         search_.stop();
     } else if (cmd == "setoption") {
-        // No options yet (Hash/Threads/MultiPV arrive later). Accepted and ignored.
+        halt_search();
+        cmd_setoption(is);
     } else if (cmd == "d") {
         emit(pos_.pretty());
+    } else if (cmd == "status") {
+        // Non-standard debug command used by tools/match.py to judge games with the perft-verified rules.
+        emit(std::string("status ") + game_status(pos_));
     } else if (cmd == "quit") {
         halt_search();
         return false;
@@ -73,6 +91,27 @@ bool Uci::execute(const std::string& line, std::ostream& out) {
         emit("info string unknown command: " + cmd);
     }
     return true;
+}
+
+// "setoption name <id, may contain spaces> [value <x>]"
+void Uci::cmd_setoption(std::istream& args) {
+    std::string token, name, value;
+    if (!(args >> token) || token != "name") return;
+    while (args >> token && token != "value") name += (name.empty() ? "" : " ") + token;
+    while (args >> token) value += (value.empty() ? "" : " ") + token;
+
+    if (name == "Hash") {
+        try {
+            const long mb = std::stol(value);
+            if (mb >= 1 && mb <= 4096) search_.set_hash_mb(std::size_t(mb));
+            else emit("info string Hash must be between 1 and 4096 MB");
+        } catch (const std::exception&) {
+            emit("info string invalid Hash value: " + value);
+        }
+    } else if (name == "Clear Hash") {
+        search_.clear_hash();
+    }
+    // Other options (Threads, MultiPV, ...) arrive later; unknown names are ignored as the UCI spec asks.
 }
 
 void Uci::cmd_position(std::istream& args) {
@@ -143,7 +182,7 @@ void Uci::cmd_go(std::istream& args) {
             std::ostringstream os;
             os << "info depth " << i.depth << " seldepth " << i.seldepth << " score " << format_score(i.score)
                << " nodes " << i.nodes << " nps " << (i.timeMs > 0 ? i.nodes * 1000 / std::uint64_t(i.timeMs) : i.nodes)
-               << " time " << i.timeMs << " pv";
+               << " hashfull " << i.hashfull << " time " << i.timeMs << " pv";
             for (Move m : i.pv) os << ' ' << to_uci(m);
             emit(os.str());
         },

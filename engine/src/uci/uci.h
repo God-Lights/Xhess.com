@@ -23,10 +23,11 @@ public:
     // Returns false when the engine should quit.
     bool execute(const std::string& line, std::ostream& out);
 
-    static constexpr const char* NAME = "Albatross 0.2.0-first-thought";
+    static constexpr const char* NAME = "Albatross 0.3.0-deep-flight";
     static constexpr const char* AUTHOR = "Xhess";
 
 private:
+    void cmd_setoption(std::istream& args);
     void cmd_position(std::istream& args);
     void cmd_go(std::istream& args);
     void emit(const std::string& line);
@@ -37,6 +38,9 @@ private:
     std::ostream* out_ = nullptr;
     std::mutex outMutex_;
 };
+
+// "ongoing", "checkmate", "stalemate", "draw_insufficient", "draw_fifty" or "draw_repetition" (threefold).
+std::string game_status(const Position& pos);
 
 // "cp 23" or "mate 3" (negative = being mated), the UCI score notation.
 std::string format_score(int score);

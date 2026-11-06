@@ -61,6 +61,13 @@ public:
     void do_move(Move m);
     void undo_move();
 
+    // Passes the turn without moving (null-move pruning). Only valid when not in check.
+    void do_null_move();
+    void undo_null_move();
+
+    // Non-pawn, non-king material of the side: false when it only has king and pawns (zugzwang-prone).
+    bool has_non_pawn_material(Color c) const { return pieces(c) & ~pieces(PAWN, KING); }
+
     // Draw rules.
     int repetition_count() const;          // occurrences of the current position in the game so far (>= 1)
     bool insufficient_material() const;    // dead position by material (FIDE 5.2.2 subset)
