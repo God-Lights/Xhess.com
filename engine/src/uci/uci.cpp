@@ -8,6 +8,7 @@
 
 #include "../core/movegen.h"
 #include "../core/perft.h"
+#include "../eval/evaluation.h"
 
 namespace albatross {
 
@@ -63,7 +64,7 @@ bool Uci::execute(const std::string& line, std::ostream& out) {
 
     if (cmd == "uci") {
         emit(std::string("id name ") + NAME + "\nid author " + AUTHOR +
-             "\noption name Hash type spin default 16 min 1 max 4096"
+             "\noption name Hash type spin default 16 min 1 max " + std::to_string(ALBATROSS_MAX_HASH_MB) +
              "\noption name Clear Hash type button"
              "\noption name MultiPV type spin default 1 min 1 max 32"
              "\nuciok");
@@ -85,6 +86,9 @@ bool Uci::execute(const std::string& line, std::ostream& out) {
         cmd_setoption(is);
     } else if (cmd == "d") {
         emit(pos_.pretty());
+    } else if (cmd == "eval") {
+        // Per-term breakdown of the static evaluation of the current position.
+        emit(format_trace(evaluate_trace(pos_)));
     } else if (cmd == "status") {
         // Non-standard debug command used by tools/match.py to judge games with the perft-verified rules.
         emit(std::string("status ") + game_status(pos_));
@@ -107,8 +111,8 @@ void Uci::cmd_setoption(std::istream& args) {
     if (name == "Hash") {
         try {
             const long mb = std::stol(value);
-            if (mb >= 1 && mb <= 4096) search_.set_hash_mb(std::size_t(mb));
-            else emit("info string Hash must be between 1 and 4096 MB");
+            if (mb >= 1 && mb <= ALBATROSS_MAX_HASH_MB) search_.set_hash_mb(std::size_t(mb));
+            else emit("info string Hash must be between 1 and " + std::to_string(ALBATROSS_MAX_HASH_MB) + " MB");
         } catch (const std::exception&) {
             emit("info string invalid Hash value: " + value);
         }

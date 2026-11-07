@@ -7,3 +7,12 @@
 
 /play/*.wasm
   Content-Type: application/wasm
+
+# Albatross 엔진: 다른 사이트가 로더로 가져가 쓸 수 있도록 CORS 를 연다.
+/engine/*
+  Access-Control-Allow-Origin: *
+  Cross-Origin-Resource-Policy: cross-origin
+  Cache-Control: public, max-age=3600
+
+/engine/*.js
+  Content-Type: text/javascript; charset=utf-8

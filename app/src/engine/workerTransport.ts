@@ -16,3 +16,6 @@ export function createWorkerTransport(url: string): Transport {
 }
 
 export const STOCKFISH_URL = `${import.meta.env.BASE_URL}engine/stockfish-19-lite-single.js`;
+
+/** 자체 엔진 Albatross (WebAssembly, 파일 하나). engine/wasm/build.sh 가 만든 것을 복사해 쓴다. */
+export const ALBATROSS_URL = `${import.meta.env.BASE_URL}engine/albatross.js`;

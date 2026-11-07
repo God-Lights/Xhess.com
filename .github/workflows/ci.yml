@@ -17,6 +17,32 @@ jobs:
       - run: cmake --build engine/build --config Release
       - run: ctest --test-dir engine/build -C Release --output-on-failure
 
+  # 브라우저용 엔진(WebAssembly). 새로 빌드한 것과 저장소에 커밋된 배포 파일이 모두 네이티브와
+  # 같은 결과(고정 깊이 탐색의 노드 수·점수·수순)를 내는지 확인한다. 엔진 소스를 바꾸고
+  # engine/wasm/build.sh 로 배포 파일을 다시 만들지 않았다면 여기서 실패한다.
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v14
+        with: { version: 3.1.50 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Native reference build
+        run: |
+          cmake -S engine -B engine/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build engine/build --target albatross
+      - name: Build the browser engine
+        run: engine/wasm/build.sh engine/wasm/ci-dist
+      - name: Fresh build matches native
+        run: node engine/wasm/tests/node_test.cjs engine/wasm/ci-dist/albatross.js engine/build/albatross
+      - name: Committed artifact matches native (is it up to date?)
+        run: node engine/wasm/tests/node_test.cjs engine/wasm/dist/albatross.js engine/build/albatross
+      - uses: actions/upload-artifact@v4
+        with:
+          name: albatross-wasm
+          path: engine/wasm/ci-dist/*
+
   web:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: app } }
@@ -28,6 +54,9 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: Site build (install page + engine download)
+        working-directory: .
+        run: node site/build.mjs
 
   desktop:
     needs: web

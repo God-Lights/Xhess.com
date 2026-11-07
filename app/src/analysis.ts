@@ -73,9 +73,10 @@ export class Analyzer {
         if (my !== this.token) return;
         collector.update(info);
         // 분석 도중에 계획 평가가 끼어들어도 이미 깊이 구한 1순위를 비교 기준으로 쓸 수 있게 계속 보관한다.
-        if (info.multipv === 1 && info.pv.length > 0) {
+        const top = collector.lines()[0];
+        if (top) {
           this.cachedFen = fen;
-          this.cachedBest = info;
+          this.cachedBest = top;
         }
         const now = Date.now();
         if (now - last >= throttle) {

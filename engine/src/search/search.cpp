@@ -344,6 +344,9 @@ SearchResult Searcher::run() {
         }
         if (!complete) break;  // an interrupted iteration is incomplete: keep the previous result
 
+        // The lines were searched one after another with the earlier best moves excluded, so a later line can
+        // end up with a higher score than an earlier one (search instability). Report them best first.
+        std::stable_sort(lines.begin(), lines.end(), [](const RootLine& a, const RootLine& b) { return a.score > b.score; });
         for (int k = 0; k < lineCount; ++k) prevBest[k] = lines[k].pv[0];
         result.score = lines[0].score;
         result.depth = depth;
@@ -375,8 +378,10 @@ SearchResult Searcher::run() {
     result.nodes = nodes_;
 
     // "go infinite" must not report a result before "stop", even if the depth limit was reached.
+#ifndef ALBATROSS_NO_THREADS
     if (limits_.infinite)
         while (!stopFlag_.load(std::memory_order_relaxed)) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+#endif
     return result;
 }
 
@@ -403,16 +408,24 @@ void Search::go(Position pos, const Limits& limits, InfoCallback onInfo, BestMov
     wait();
     stop_ = false;
     infinite_ = limits.infinite;
+#ifdef ALBATROSS_NO_THREADS
+    // Single-threaded build: search right here. "stop" cannot arrive while this runs.
+    const SearchResult r = search_position(std::move(pos), limits, stop_, tt_, onInfo);
+    if (onBest) onBest(r);
+#else
     thread_ = std::thread([this, pos = std::move(pos), limits, onInfo = std::move(onInfo), onBest = std::move(onBest)]() mutable {
         const SearchResult r = search_position(std::move(pos), limits, stop_, tt_, onInfo);
         if (onBest) onBest(r);
     });
+#endif
 }
 
 void Search::stop() { stop_ = true; }
 
 void Search::wait() {
+#ifndef ALBATROSS_NO_THREADS
     if (thread_.joinable()) thread_.join();
+#endif
 }
 
 }  // namespace albatross

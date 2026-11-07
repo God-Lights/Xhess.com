@@ -6,7 +6,7 @@ import "chessground/assets/chessground.cburnett.css";
 import "./style.css";
 import { Game, type Color, type Key } from "./game";
 import { UciEngine, type SearchInfo } from "./engine/uci";
-import { createWorkerTransport, STOCKFISH_URL } from "./engine/workerTransport";
+import { ALBATROSS_URL, createWorkerTransport, STOCKFISH_URL } from "./engine/workerTransport";
 import { createTauriTransport, isTauri } from "./engine/tauriTransport";
 import type { DrawShape } from "chessground/draw";
 import { Analyzer } from "./analysis";
@@ -24,6 +24,9 @@ let epoch = 0; // 새 게임/무르기 시 진행 중이던 엔진 응답을 무
 
 let engine: UciEngine | null = null;
 const PATH_KEY = "xhess.enginePath";
+const KIND_KEY = "xhess.engineKind";
+type EngineKind = "stockfish" | "albatross";
+let engineKind: EngineKind = (() => { try { return localStorage.getItem(KIND_KEY) === "albatross" ? "albatross" : "stockfish"; } catch { return "stockfish"; } })();
 
 const ground: Api = Chessground($("board"), {
   fen: game.fen,
@@ -100,7 +103,8 @@ function showHumanNote(c: HumanChoice | null): void {
 function applyEngineModeUi(): void {
   $<HTMLSelectElement>("engineMode").value = engineMode;
   $("humanOpts").hidden = engineMode !== "human";
-  $<HTMLInputElement>("level").disabled = engineMode === "human"; // 인간 모드는 난이도 슬라이더 대신 실수 빈도를 쓴다
+  // 인간 모드는 난이도 슬라이더 대신 실수 빈도를 쓰고, Albatross 에는 난이도 옵션이 없다.
+  $<HTMLInputElement>("level").disabled = engineMode === "human" || engineKind === "albatross";
   $<HTMLInputElement>("humanness").value = String(Math.round(humanParams.humanness * 100));
   $<HTMLInputElement>("boldness").value = String(Math.round(humanParams.boldness * 100));
   $("humanOut").textContent = String(Math.round(humanParams.humanness * 100));
@@ -358,7 +362,20 @@ async function startEngine(): Promise<void> {
 
   let label = "";
   let native = false;
-  if (isTauri()) {
+  if (engineKind === "albatross") {
+    // 자체 엔진(WebAssembly). 다운로드·컴파일에 시간이 걸릴 수 있어 넉넉히 기다리고, 실패하면 Stockfish 로 대신한다.
+    let candidate: UciEngine | null = null;
+    try {
+      candidate = new UciEngine(createWorkerTransport(ALBATROSS_URL));
+      await withTimeout(candidate.init(), 20000);
+      engine = candidate;
+      label = "Albatross 0.4 (WASM, 자체 엔진)";
+    } catch (e) {
+      candidate?.quit();
+      console.warn("albatross unavailable", e);
+      label = `Stockfish WASM (Albatross 실패: ${e instanceof Error ? e.message : e})`;
+    }
+  } else if (isTauri()) {
     let candidate: UciEngine | null = null;
     try {
       const t = await createTauriTransport(savedPath());
@@ -387,7 +404,8 @@ async function startEngine(): Promise<void> {
     engine.setOption("Threads", Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 2) - 1)));
     engine.setOption("Hash", 256);
   }
-  engine.setOption("Skill Level", $<HTMLInputElement>("level").value);
+  if (engineKind === "albatross" && engine && label.startsWith("Albatross")) engine.setOption("Hash", 32);
+  else engine.setOption("Skill Level", $<HTMLInputElement>("level").value);  // Albatross 에는 난이도 옵션이 없다
   await engine.ready();
   $("engineLabel").textContent = label;
   engineReady = true;
@@ -406,6 +424,14 @@ if (isTauri()) {
 
 sync();
 startEngine().catch((e) => setStatus(`엔진 오류: ${e}`));
+
+$<HTMLSelectElement>("engineKind").value = engineKind;
+$<HTMLSelectElement>("engineKind").onchange = (e) => {
+  engineKind = (e.target as HTMLSelectElement).value as EngineKind;
+  try { localStorage.setItem(KIND_KEY, engineKind); } catch { /* 저장 불가 환경은 무시 */ }
+  applyEngineModeUi();
+  void startEngine().catch((err) => setStatus(`엔진 오류: ${err}`));
+};
 
 $<HTMLSelectElement>("engineMode").onchange = (e) => {
   engineMode = (e.target as HTMLSelectElement).value as EngineMode;

@@ -3,3 +3,7 @@ dist
 public/engine
 .DS_Store
 site/dist
+
+# 브라우저용 Albatross 산출물은 미리 빌드해 커밋한다 (사이트·앱 빌드가 가져다 쓴다)
+!engine/wasm/dist
+!engine/wasm/dist/**

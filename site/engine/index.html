@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Albatross — 브라우저용 체스 엔진</title>
+  <meta name="description" content="Albatross 체스 엔진을 파일 하나로 내려받아 어느 웹사이트에서든 쓰세요. 설치 없음, UCI, WebAssembly." />
+  <meta name="theme-color" content="#262421" />
+  <link rel="icon" href="../favicon.png" />
+  <link rel="stylesheet" href="../style.css" />
+  <style>
+    main { max-width: 820px; }
+    h2 { margin: 0 0 8px; font-size: 20px; }
+    section.card { margin-bottom: 16px; }
+    pre { background:#201e1c; border-radius:8px; padding:12px 14px; overflow-x:auto; font-size:13px; line-height:1.5; margin:8px 0 0; }
+    code { font-family: ui-monospace, "SF Mono", Consolas, monospace; }
+    p code, li code, td code { background:#201e1c; padding:1px 6px; border-radius:4px; font-size:13px; }
+    table { width:100%; border-collapse:collapse; font-size:14px; }
+    td { padding:6px 8px; border-top:1px solid #444; vertical-align:top; } td:first-child { white-space:nowrap; }
+    .hash { word-break: break-all; font-size:12px; }
+    #demoOut { max-height: 220px; overflow:auto; }
+    ul { padding-left: 20px; margin: 6px 0 0; } li { margin: 4px 0; }
+    .back { display:inline-block; margin: 12px 16px 0; font-size:14px; }
+  </style>
+</head>
+<body>
+  <a class="back" href="../">← Xhess</a>
+  <header class="hero">
+    <h1>Albatross</h1>
+    <p class="tag">브라우저용 체스 엔진 · 파일 하나 · 설치 없음 · v__VERSION__</p>
+  </header>
+
+  <main>
+    <section class="card primary" style="text-align:center">
+      <h2>다운로드</h2>
+      <p class="muted">WebAssembly 가 들어 있는 자바스크립트 파일 하나(__SIZE__ KB)입니다. 웹 워커로 실행하면 UCI 로 대화합니다.</p>
+      <div class="actions">
+        <a class="btn" href="albatross.js" download>albatross.js (최신)</a>
+        <a class="btn ghost" href="albatross-__VERSION__.js" download>albatross-__VERSION__.js (버전 고정)</a>
+        <a class="btn ghost" href="albatross-loader.js" download>albatross-loader.js (선택)</a>
+      </div>
+      <p class="muted small hash">SHA-256 (albatross.js): <code>__SHA256__</code></p>
+    </section>
+
+    <section class="card">
+      <h2>1. 내 사이트에 올려서 쓰기</h2>
+      <p class="muted">내려받은 <code>albatross.js</code> 를 내 서버에 올리고 같은 사이트에서 웹 워커로 엽니다.</p>
+<pre><code>const engine = new Worker('albatross.js');
+engine.onmessage = (e) =&gt; console.log(e.data);   // "uciok", "info depth 8 ...", "bestmove e2e4"
+engine.postMessage('uci');
+engine.postMessage('position startpos moves e2e4 e7e5');
+engine.postMessage('go movetime 1000');</code></pre>
+    </section>
+
+    <section class="card">
+      <h2>2. 다운로드 없이, 어느 사이트에서든</h2>
+      <p class="muted">브라우저는 다른 사이트의 파일로 <code>new Worker(url)</code> 를 만들지 못합니다. 로더가 엔진을 가져와 <code>blob:</code> 워커로 시작해 줍니다. 이 사이트는 어느 출처에서든 가져갈 수 있게(CORS) 열려 있습니다.</p>
+<pre><code>&lt;script src="<span class="origin">https://…</span>/engine/albatross-loader.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  createAlbatross().then(function (engine) {          // 웹 워커(UCI)
+    engine.onmessage = function (e) { console.log(e.data); };
+    engine.postMessage('uci');
+    engine.postMessage('position startpos');
+    engine.postMessage('go depth 12');
+  });
+&lt;/script&gt;</code></pre>
+      <p class="muted small">엄격한 Content-Security-Policy 가 있는 페이지는 <code>worker-src blob:</code> 과 이 사이트로의 <code>connect-src</code> 를 허용해야 합니다.</p>
+    </section>
+
+    <section class="card">
+      <h2>지금 해 보기</h2>
+      <p class="muted">이 페이지가 위의 로더로 엔진을 받아 시작 포지션을 분석합니다.</p>
+      <div class="actions"><button class="btn" id="demoBtn" type="button">엔진 실행</button></div>
+      <pre id="demoOut" aria-live="polite">대기 중</pre>
+    </section>
+
+    <section class="card">
+      <h2>지원하는 UCI</h2>
+      <table>
+        <tr><td><code>uci</code> <code>isready</code> <code>ucinewgame</code> <code>position</code> <code>go</code> <code>stop</code> <code>quit</code></td><td>표준 UCI 명령</td></tr>
+        <tr><td><code>go depth|nodes|movetime|wtime|btime|winc|binc|movestogo|infinite</code></td><td>탐색 제한. <code>searchmoves</code> 로 특정 수만 평가할 수도 있습니다.</td></tr>
+        <tr><td><code>setoption name Hash value N</code></td><td>해시 테이블 크기(MB). 1–256, 기본 16.</td></tr>
+        <tr><td><code>setoption name MultiPV value N</code></td><td>후보 수(라인) 개수, 1–32. <code>info … multipv k</code> 로 보고합니다.</td></tr>
+        <tr><td><code>setoption name Clear Hash</code></td><td>해시 비우기</td></tr>
+        <tr><td><code>eval</code></td><td>현재 포지션의 평가를 항목별(폰 구조, 킹 안전, 기동성 …)로 출력 — 표준 UCI 가 아닌 확장</td></tr>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>알아둘 점</h2>
+      <ul>
+        <li><b>단일 스레드</b>입니다. 탐색은 전용 워커에서 돌기 때문에 페이지는 멈추지 않습니다.</li>
+        <li><b><code>stop</code> 은 엔진 워커를 다시 시작</b>합니다(WebAssembly 탐색은 안쪽에서 끊을 수 없기 때문). 지금까지 끝낸 가장 깊은 수를 <code>bestmove</code> 로 돌려주고, 위치와 옵션은 복원되지만 <b>해시 테이블은 비워집니다.</b></li>
+        <li>필요한 것: Web Worker, WebAssembly, 워커 안의 워커(Chrome·Edge·Firefox 최신, Safari 15 이상).</li>
+        <li>강도: 같은 계열 이전 버전(0.3)에 +129 Elo(200판, 수당 50 ms, 95% 구간 +85~+177). <b>다른 엔진 대비 절대 강도는 측정하지 않았습니다.</b></li>
+        <li>속도는 같은 코드의 네이티브 빌드보다 느립니다(이 개발 환경에서 약 1.5 M nps 수준, 기기에 따라 다릅니다).</li>
+        <li>라이선스: MIT. <a href="https://github.com/god-lights/xhess.com" rel="noopener">소스 코드</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <footer><p class="muted small">Albatross __VERSION__ · <a href="https://github.com/god-lights/xhess.com/tree/main/engine" rel="noopener">engine/</a></p></footer>
+
+  <script src="albatross-loader.js"></script>
+  <script>
+    // 사용 예시에 이 사이트의 실제 주소를 채운다.
+    document.querySelectorAll('.origin').forEach(function (el) { el.textContent = location.origin; });
+
+    // 데모: 로더로 엔진을 받아 시작 포지션을 분석한다(이 페이지 자신이 "다른 사이트"의 사용 예시와 같은 코드).
+    var out = document.getElementById('demoOut');
+    var btn = document.getElementById('demoBtn');
+    var running = false;
+    btn.addEventListener('click', function () {
+      if (running) return;
+      running = true; btn.disabled = true; out.textContent = '엔진을 받는 중…\n';
+      var log = function (s) { out.textContent += s + '\n'; out.scrollTop = out.scrollHeight; };
+      createAlbatross().then(function (engine) {
+        engine.onmessage = function (e) {
+          var line = String(e.data);
+          if (line.indexOf('id name') === 0 || line.indexOf('info depth') === 0 || line.indexOf('bestmove') === 0) log(line.length > 110 ? line.slice(0, 110) + '…' : line);
+          if (line.indexOf('bestmove') === 0) { engine.postMessage('quit'); running = false; btn.disabled = false; }
+        };
+        engine.postMessage('uci');
+        engine.postMessage('position startpos');
+        engine.postMessage('go movetime 1500');
+      }).catch(function (err) { log('실패: ' + err.message); running = false; btn.disabled = false; });
+    });
+  </script>
+</body>
+</html>

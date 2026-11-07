@@ -380,3 +380,27 @@ TEST(uci_multipv_and_searchmoves) {
     CHECK(big.find(" multipv 20 ") != std::string::npos);
     CHECK(big.find(" multipv 21 ") == std::string::npos);  // start position has 20 legal moves
 }
+
+TEST(multipv_lines_are_reported_best_first) {
+    // On many positions and depths the lines must come out ordered by score even though they are searched one by one.
+    const char* fens[] = {
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+        "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10",
+        "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
+        Position::START_FEN,
+    };
+    for (const char* fen : fens) {
+        for (int depth = 2; depth <= 7; ++depth) {
+            Position p;
+            CHECK(p.set(fen));
+            Limits l;
+            l.depth = depth;
+            l.multiPv = 4;
+            std::atomic<bool> stop{false};
+            const SearchResult r = search_position(p, l, stop);
+            for (std::size_t i = 1; i < r.lines.size(); ++i) CHECK(r.lines[i].score <= r.lines[i - 1].score);
+            CHECK(r.pv[0] == r.lines[0].pv[0]);
+            CHECK_EQ(r.score, r.lines[0].score);
+        }
+    }
+}
