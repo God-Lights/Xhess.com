@@ -2,9 +2,12 @@
 # Builds the browser engine: a single self-contained file (WebAssembly embedded) that runs as a Web Worker.
 #   engine/wasm/build.sh [output-dir]      requires Emscripten (em++) on PATH
 set -euo pipefail
-cd "$(dirname "$0")/.."            # engine/
-OUT="${1:-wasm/dist}"
-mkdir -p "$OUT"
+HERE="$(cd "$(dirname "$0")" && pwd)"            # engine/wasm
+# The output directory is resolved before changing directory, so a relative path means "relative to where
+# the script was started" (e.g. `engine/wasm/build.sh engine/wasm/ci-dist` from the repository root).
+mkdir -p "${1:-$HERE/dist}"
+OUT="$(cd "${1:-$HERE/dist}" && pwd)"
+cd "$HERE/.."                                      # engine/
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
