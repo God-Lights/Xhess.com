@@ -3,8 +3,13 @@
 #include <atomic>
 #include <cstdint>
 #include <functional>
-#include <thread>
 #include <vector>
+
+// The WebAssembly build is single-threaded: define ALBATROSS_NO_THREADS and a search runs synchronously
+// inside go() (the JavaScript wrapper stops a search by restarting the engine worker).
+#ifndef ALBATROSS_NO_THREADS
+#include <thread>
+#endif
 
 #include "../core/move.h"
 #include "../core/position.h"
@@ -80,7 +85,9 @@ public:
 private:
     TranspositionTable tt_{16};
     std::atomic<bool> stop_{false};
+#ifndef ALBATROSS_NO_THREADS
     std::thread thread_;
+#endif
     bool infinite_ = false;
 };
 

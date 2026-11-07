@@ -12,4 +12,9 @@ for (const f of ["stockfish-19-lite-single.js", "stockfish-19-lite-single.wasm"]
   if (!existsSync(resolve(src, f))) throw new Error(`missing ${f} in node_modules/stockfish`);
   copyFileSync(resolve(src, f), resolve(dst, f));
 }
+
+// 자체 엔진 Albatross (미리 빌드해 커밋해 둔 단일 파일). 빌드 방법: engine/wasm/build.sh
+const albatross = resolve(root, "../engine/wasm/dist/albatross.js");
+if (!existsSync(albatross)) throw new Error("missing engine/wasm/dist/albatross.js (build it with engine/wasm/build.sh)");
+copyFileSync(albatross, resolve(dst, "albatross.js"));
 console.log("engine files copied to public/engine");

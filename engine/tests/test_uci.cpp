@@ -50,3 +50,11 @@ TEST(uci_go_returns_a_legal_move) {
     // Checkmated side has no move.
     CHECK(contains(run("position startpos moves f2f3 e7e5 g2g4 d8h4\ngo\n"), "bestmove 0000"));
 }
+
+TEST(uci_eval_command_prints_the_breakdown) {
+    const std::string out = run("position startpos moves e2e4\neval\nquit\n");
+    CHECK(contains(out, "Passed pawns"));
+    CHECK(contains(out, "Final evaluation:"));
+    CHECK(contains(out, "side to move"));
+    CHECK(contains(run("uci\n"), "id name Albatross 0.4"));
+}

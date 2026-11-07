@@ -7,6 +7,11 @@
 #include "../core/position.h"
 #include "../search/search.h"
 
+// Largest Hash (MB) the UCI option accepts. The browser build is limited by WebAssembly memory.
+#ifndef ALBATROSS_MAX_HASH_MB
+#define ALBATROSS_MAX_HASH_MB 4096
+#endif
+
 namespace albatross {
 
 // UCI front end. Reads commands from `in`, writes responses to `out`, so it can be unit-tested with stringstreams.
@@ -23,7 +28,7 @@ public:
     // Returns false when the engine should quit.
     bool execute(const std::string& line, std::ostream& out);
 
-    static constexpr const char* NAME = "Albatross 0.3.1-deep-flight";
+    static constexpr const char* NAME = "Albatross 0.4.0-position-sense";
     static constexpr const char* AUTHOR = "Xhess";
 
 private:
