@@ -344,6 +344,9 @@ SearchResult Searcher::run() {
         }
         if (!complete) break;  // an interrupted iteration is incomplete: keep the previous result
 
+        // The lines were searched one after another with the earlier best moves excluded, so a later line can
+        // end up with a higher score than an earlier one (search instability). Report them best first.
+        std::stable_sort(lines.begin(), lines.end(), [](const RootLine& a, const RootLine& b) { return a.score > b.score; });
         for (int k = 0; k < lineCount; ++k) prevBest[k] = lines[k].pv[0];
         result.score = lines[0].score;
         result.depth = depth;

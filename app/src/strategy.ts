@@ -28,8 +28,11 @@ export class LineCollector {
     if (!prev || info.depth >= prev.depth) this.byIndex.set(info.multipv, info);
   }
 
+  /** 점수가 높은 순(같으면 라인 번호순). MultiPV 라인은 따로 탐색되어 번호와 점수 순서가 어긋날 수 있다. */
   lines(): SearchInfo[] {
-    return [...this.byIndex.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v);
+    return [...this.byIndex.entries()]
+      .sort((a, b) => scoreValue(b[1]) - scoreValue(a[1]) || a[0] - b[0])
+      .map(([, v]) => v);
   }
 
   clear(): void {

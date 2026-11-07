@@ -38,6 +38,24 @@ describe("LineCollector", () => {
     c.clear();
     expect(c.lines()).toEqual([]);
   });
+
+  it("점수가 더 높은 라인이 먼저 온다 (MultiPV 번호와 점수 순서가 어긋나도)", () => {
+    const c = new LineCollector();
+    c.update(info(1, 11, ["c3"], 12));
+    c.update(info(2, 29, ["f3"], 12));
+    c.update(info(3, 22, ["e3"], 12));
+    expect(c.lines().map((l) => [l.multipv, l.cp])).toEqual([[2, 29], [3, 22], [1, 11]]);
+    // 점수가 같으면 라인 번호순을 유지한다
+    const d = new LineCollector();
+    d.update(info(2, 5, ["b"], 8));
+    d.update(info(1, 5, ["a"], 8));
+    expect(d.lines().map((l) => l.multipv)).toEqual([1, 2]);
+    // 메이트가 센티폰보다 앞선다
+    const m = new LineCollector();
+    m.update(info(1, 300, ["a"], 8));
+    m.update({ multipv: 2, depth: 8, mate: 3, pv: ["b"] });
+    expect(m.lines()[0].multipv).toBe(2);
+  });
 });
 
 describe("legalSequence", () => {
