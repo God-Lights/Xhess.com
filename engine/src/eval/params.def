@@ -10,8 +10,8 @@
 // engine/docs/0.5-tuning.md (tools/tuner); hand-written starting points before that.
 
 // ---- material (centipawns). The pawn middlegame value is the anchor of the scale and is never tuned ----
-ARRAY(materialMg, 7, 0, 100, 320, 330, 500, 900, 0)
-ARRAY(materialEg, 7, 0, 120, 300, 320, 520, 920, 0)
+ARRAY(materialMg, 7, 0, 100, 361, 378, 502, 1349, 0)
+ARRAY(materialEg, 7, 0, 82, 299, 340, 593, 960, 0)
 
 // ---- piece-square tables ----
 ARRAY(pstPawnMg, 64,

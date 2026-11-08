@@ -250,7 +250,7 @@ TEST(format_params_matches_params_def_entries) {
     const std::string text = format_params();
     CHECK(text.find("doubledPawn = -8 -18\n") != std::string::npos);
     CHECK(text.find("shieldNear = 10\n") != std::string::npos);
-    CHECK(text.find("materialMg = 0 100 320 330 500 900 0\n") != std::string::npos);
+    CHECK(text.find("materialMg = 0 100 361 378 502 1349 0\n") != std::string::npos);
     // Every table has 64 numbers.
     std::istringstream in(text);
     int tables = 0;
