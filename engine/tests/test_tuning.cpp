@@ -51,7 +51,7 @@ TEST(params_registry_lists_every_weight) {
     for (const char* n : {"doubledPawn.mg", "doubledPawn.eg", "shieldNear", "pstKnight[27]", "materialMg[2]", "passedEg[6]", "mobilityMg[5]"})
         CHECK(names.count(n) == 1);
     // The defaults are the values of params.def.
-    CHECK_EQ(EvalP.shieldNear, 5);
+    CHECK_EQ(EvalP.shieldNear, 10);
     CHECK_EQ(EvalP.materialMg[PAWN], 100);
 }
 
@@ -248,9 +248,9 @@ TEST(dataset_loading_skips_bad_lines) {
 
 TEST(format_params_matches_params_def_entries) {
     const std::string text = format_params();
-    CHECK(text.find("doubledPawn = -21 -18\n") != std::string::npos);
-    CHECK(text.find("shieldNear = 5\n") != std::string::npos);
-    CHECK(text.find("materialMg = 0 100 361 378 502 1349 0\n") != std::string::npos);
+    CHECK(text.find("doubledPawn = -8 -18\n") != std::string::npos);
+    CHECK(text.find("shieldNear = 10\n") != std::string::npos);
+    CHECK(text.find("materialMg = 0 100 320 330 500 900 0\n") != std::string::npos);
     // Every table has 64 numbers.
     std::istringstream in(text);
     int tables = 0;
