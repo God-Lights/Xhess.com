@@ -100,6 +100,9 @@ bool is_tunable(const std::string& name) {
 
     if (base == "materialMg") return !in({0, 1, 6});          // 1 = the pawn: anchor of the whole scale
     if (base == "materialEg") return !in({0, 6});
+    // Only matter in endgames with a lone king or a runaway pawn; quiet self-play positions hardly contain them,
+    // so a fit would be noise (the first run drove unstoppablePasser from 450 to 171 and mopUpEdge negative).
+    if (base == "unstoppablePasser" || base == "mopUpEdge" || base == "mopUpKing") return false;
     if (base == "kingAttackUnit") return false;               // enters the score quadratically
     if (base == "mobilityBase") return false;                 // redundant with the weights and the tables
     if (base == "mobilityMg" || base == "mobilityEg") return !in({0, 1, 6});
