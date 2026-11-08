@@ -38,7 +38,7 @@ Albatross 에는 난이도(Skill Level) 옵션이 없어 난이도 슬라이더�
 
 ## 지원하는 UCI
 `uci` `isready` `ucinewgame` `position` `go`(`depth` `nodes` `movetime` `wtime` `btime` `winc` `binc` `movestogo` `infinite` `searchmoves`) `stop` `quit`,
-옵션 `Hash`(1–256 MB, 기본 16)·`MultiPV`(1–32)·`Clear Hash`, 확장 명령 `eval`(항목별 평가).
+옵션 `Hash`(1–256 MB, 기본 16)·`MultiPV`(1–32)·`Clear Hash`, 확장 명령 `eval`(항목별 평가)·`themes`(전략 테마: 점수를 준 칸과 값, `docs/strategy-themes.md`).
 
 ## 왜 워커가 두 겹인가 (stop 처리)
 브라우저의 WebAssembly 탐색은 한 번 시작하면 안쪽에서 중간에 끊을 수 없다(스레드와 공유 메모리가 필요한데, 그러려면 사이트마다

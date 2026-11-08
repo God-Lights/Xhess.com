@@ -89,6 +89,9 @@ bool Uci::execute(const std::string& line, std::ostream& out) {
     } else if (cmd == "eval") {
         // Per-term breakdown of the static evaluation of the current position.
         emit(format_trace(evaluate_trace(pos_)));
+    } else if (cmd == "themes") {
+        // Strategic themes of the current position (squares and values that make up the evaluation).
+        emit(format_themes(evaluate_trace(pos_)));
     } else if (cmd == "status") {
         // Non-standard debug command used by tools/match.py to judge games with the perft-verified rules.
         emit(std::string("status ") + game_status(pos_));

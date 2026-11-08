@@ -27,6 +27,10 @@ cd desktop && npm run build                   # 설치 파일 (nsis / deb / AppI
 
 Albatross 0.4 부터 엔진을 **파일 하나(`albatross.js`)로 내려받아 어느 웹사이트에서든** 웹 워커로 쓸 수 있다. 배포 사이트의 `/engine/` 에 다운로드와 사용법이 있다. 자세한 내용: `docs/albatross-web.md`.
 
+## 전략 테마
+
+내 차례에 포지션의 특징(통과폰, 약한 폰, 전초기지, 킹 안전 …)을 보드에 색 원으로 표시하고 추천 전략을 문장으로 알려 준다. Albatross 평가 함수가 직접 기록한 것을 쓴다. 자세한 내용: `docs/strategy-themes.md`.
+
 ## 전략 마킹
 
 엔진의 추천 수·예상 응수를 보드에 화살표로 보여 주고, 내가 오른쪽 클릭 드래그로 그린 계획을 엔진이 평가한다. 자세한 내용: `docs/strategy-marking.md`.

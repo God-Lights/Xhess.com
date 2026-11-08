@@ -58,6 +58,13 @@ async function engine() {
   e.cmd('position fen garbage');
   check(e.lines.some((l) => l.includes('illegal fen')), '잘못된 FEN 거부');
 
+  // 4b) 전략 테마(themes): 칸과 값, 종료 줄
+  e = await engine();
+  e.cmd('position fen k7/8/8/4P3/8/8/8/4K3 w - - 0 1'); e.cmd('themes');
+  check(e.lines.some((l) => /^theme passed white e5 cp -?\d+ mg -?\d+ eg -?\d+$/.test(l)), 'themes: 통과폰 e5');
+  check(e.lines.some((l) => l.startsWith('theme unstoppable white e5 cp 450 ')), 'themes: 막을 수 없는 통과폰 450');
+  check(e.lines.at(-1).startsWith('themes done phase 0 scale 128 white '), 'themes: 종료 줄');
+
   // 5) 속도 (참고용)
   e = await engine();
   e.cmd('position fen r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10');

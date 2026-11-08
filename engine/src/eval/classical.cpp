@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <map>
 #include <cstdlib>
 #include <sstream>
 
@@ -185,9 +186,12 @@ Bitboard pawn_attacks_bb(Color c, Bitboard pawns) {
                       : shift<SOUTH_EAST>(pawns) | shift<SOUTH_WEST>(pawns);
 }
 
+// Collect = true gathers the strategic themes (evaluate_trace). Collect = false is the version search uses:
+// all of the bookkeeping is compiled away, so collecting marks cannot slow the search down.
+template <bool Collect>
 class Evaluator {
 public:
-    explicit Evaluator(const Position& pos) : pos_(pos) {}
+    explicit Evaluator(const Position& pos, std::vector<EvalMark>* marks = nullptr) : pos_(pos), marks_(marks) {}
 
     EvalTrace run() {
         EvalTrace t;
@@ -222,6 +226,10 @@ public:
 
 private:
     void add(EvalTerm term, Color c, Score s) { term_[term][c] += s; }
+    void mark(Theme theme, Color c, Square sq, Score s) {
+        if constexpr (Collect) marks_->push_back({theme, c, sq, s.mg, s.eg});
+        else (void)theme, (void)c, (void)sq, (void)s;
+    }
 
     void material_and_pst(Color c) {
         const int flip = c == WHITE ? 0 : 56;
@@ -233,7 +241,11 @@ private:
                 add(TERM_PST, c, S(PstMg[pt][s ^ flip], PstEg[pt][s ^ flip]));
             }
         }
-        if (popcount(pos_.pieces(c, BISHOP)) >= 2) add(TERM_IMBALANCE, c, BishopPair);
+        if (popcount(pos_.pieces(c, BISHOP)) >= 2) {
+            add(TERM_IMBALANCE, c, BishopPair);
+            bool first = true;  // the first bishop carries the value, the second only marks its square
+            for (Bitboard b = pos_.pieces(c, BISHOP); b; first = false) mark(THEME_BISHOP_PAIR, c, pop_lsb(b), first ? BishopPair : S(0, 0));
+        }
     }
 
     void pawns(Color c) {
@@ -246,8 +258,14 @@ private:
             const int f = file_of(s), r = relative_rank(c, s);
             const Bitboard bb = square_bb(s);
 
-            if (ours & M.ahead[c][s]) add(TERM_PAWNS, c, DoubledPawn);   // another own pawn stands in front of it
-            if (!(ours & M.adjacent[f])) add(TERM_PAWNS, c, IsolatedPawn);
+            if (ours & M.ahead[c][s]) {   // another own pawn stands in front of it
+                add(TERM_PAWNS, c, DoubledPawn);
+                mark(THEME_DOUBLED, c, s, DoubledPawn);
+            }
+            if (!(ours & M.adjacent[f])) {
+                add(TERM_PAWNS, c, IsolatedPawn);
+                mark(THEME_ISOLATED, c, s, IsolatedPawn);
+            }
             if (pawn_attacks(them, s) & ours) add(TERM_PAWNS, c, S(SupportedPawnMg[r], SupportedPawnMg[r] / 2));
             if ((shift<EAST>(bb) | shift<WEST>(bb)) & ours) add(TERM_PAWNS, c, S(PhalanxPawnMg[r], PhalanxPawnMg[r] / 2));
 
@@ -259,6 +277,7 @@ private:
                 // In the endgame the kings decide: reward our king being close, the enemy king being far.
                 bonus.eg += (distance(theirKing, stop) * 5 - distance(ourKing, stop) * 2) * std::max(r - 1, 0) / 2;
                 add(TERM_PASSED, c, bonus);
+                mark(THEME_PASSED, c, s, bonus);
             }
         }
     }
@@ -274,15 +293,28 @@ private:
             for (Bitboard b = pos_.pieces(c, pt); b;) {
                 const Square s = pop_lsb(b);
                 const int count = popcount(attacks_bb(pt, s, occ) & area);
-                add(TERM_MOBILITY, c, Mobility[pt].weight * (count - Mobility[pt].base));
+                const Score mobility = Mobility[pt].weight * (count - Mobility[pt].base);
+                add(TERM_MOBILITY, c, mobility);
 
                 const int f = file_of(s), r = relative_rank(c, s);
+                // A piece that has left its back rank but still has almost nowhere to go.
+                if (r >= 1 && ((pt == KNIGHT || pt == BISHOP) ? count <= 1 : (pt == ROOK && count <= 2))) mark(THEME_INACTIVE, c, s, mobility);
                 if (pt == KNIGHT && r >= 3 && r <= 5 && (pawn_attacks(them, s) & ours) &&
                     !(theirs & M.adjacent[f] & M.front[c][s]))
+                {
                     add(TERM_KNIGHTS, c, KnightOutpost);  // supported, and no enemy pawn can ever attack it
+                    mark(THEME_OUTPOST, c, s, KnightOutpost);
+                }
                 if (pt == ROOK) {
-                    if (!(ours & M.file[f])) add(TERM_ROOKS, c, (theirs & M.file[f]) ? RookSemiOpenFile : RookOpenFile);
-                    if (r == 6) add(TERM_ROOKS, c, RookOnSeventh);
+                    if (!(ours & M.file[f])) {
+                        const bool semi = theirs & M.file[f];
+                        add(TERM_ROOKS, c, semi ? RookSemiOpenFile : RookOpenFile);
+                        mark(semi ? THEME_ROOK_SEMI : THEME_ROOK_OPEN, c, s, semi ? RookSemiOpenFile : RookOpenFile);
+                    }
+                    if (r == 6) {
+                        add(TERM_ROOKS, c, RookOnSeventh);
+                        mark(THEME_ROOK_SEVENTH, c, s, RookOnSeventh);
+                    }
                 }
             }
         }
@@ -301,10 +333,15 @@ private:
             const int r1 = kr + dir, r2 = kr + 2 * dir;
             const bool near = r1 >= 0 && r1 < 8 && (ours & square_bb(make_square(f, r1)));
             const bool far = r2 >= 0 && r2 < 8 && (ours & square_bb(make_square(f, r2)));
+            const int fileOpen = !(ours & M.file[f]) ? ((theirs & M.file[f]) ? KingFileSemiOpen : KingFileOpen) : 0;
             if (near) shield += ShieldNear;
             else if (far) shield += ShieldFar;
-            else shield += ShieldMissing;
-            if (!(ours & M.file[f])) shield += (theirs & M.file[f]) ? KingFileSemiOpen : KingFileOpen;
+            else {
+                shield += ShieldMissing;
+                // A hole in front of the king (plus an open file if no pawn of ours is left on it).
+                mark(THEME_KING_SHIELD, c, (r1 >= 0 && r1 < 8) ? make_square(f, r1) : ksq, S(ShieldMissing + fileOpen, 0));
+            }
+            shield += fileOpen;
         }
 
         // Enemy pieces attacking the squares around the king (and one rank further forward).
@@ -313,10 +350,14 @@ private:
         const Bitboard occ = pos_.pieces();
         int units = 0, attackers = 0;
         bool queen = false;
+        Square attackerSquares[16];
         for (int t = KNIGHT; t <= QUEEN; ++t) {
             for (Bitboard b = pos_.pieces(them, PieceType(t)); b;) {
                 const Square s = pop_lsb(b);
                 if (attacks_bb(PieceType(t), s, occ) & zone) {
+                    if constexpr (Collect) {
+                        if (attackers < 16) attackerSquares[attackers] = s;
+                    }
                     ++attackers;
                     units += KingAttackUnit[t];
                     queen |= t == QUEEN;
@@ -325,6 +366,12 @@ private:
         }
         int danger = 0;
         if (attackers >= 2) danger = std::min(units * units, 400) / (queen ? 1 : 2);
+        if constexpr (Collect) {
+            if (danger > 0) {
+                // The first attacker carries the value, the others only mark their squares.
+                for (int i = 0; i < std::min(attackers, 16); ++i) mark(THEME_KING_DANGER, c, attackerSquares[i], i == 0 ? S(-danger, 0) : S(0, 0));
+            }
+        }
 
         add(TERM_KING, c, S(shield - danger, 0));
     }
@@ -339,7 +386,9 @@ private:
         const int heavy = popcount(pos_.pieces(c, QUEEN)) * 9 + popcount(pos_.pieces(c, ROOK)) * 5 +
                           popcount(pos_.pieces(c, BISHOP)) * 3 + popcount(pos_.pieces(c, KNIGHT)) * 3;
         if (loneKing && heavy >= 5) {
-            add(TERM_ENDGAME, c, S(0, 10 * center_distance(theirKing) + 8 * (7 - distance(ourKing, theirKing))));
+            const Score mopUp = S(0, 10 * center_distance(theirKing) + 8 * (7 - distance(ourKing, theirKing)));
+            add(TERM_ENDGAME, c, mopUp);
+            mark(THEME_MOPUP, c, theirKing, mopUp);
         }
 
         // Rule of the square: if the enemy has no pieces, a passed pawn the enemy king cannot catch wins.
@@ -355,7 +404,10 @@ private:
             const int king = distance(theirKing, promo);
             const bool attackerToMove = pos_.side_to_move() == c;
             // The enemy king needs `king` moves; it moves second if the pawn's side is to move.
-            if (attackerToMove ? king >= moves : king > moves) add(TERM_ENDGAME, c, S(0, UnstoppablePasser));
+            if (attackerToMove ? king >= moves : king > moves) {
+                add(TERM_ENDGAME, c, S(0, UnstoppablePasser));
+                mark(THEME_UNSTOPPABLE, c, s, S(0, UnstoppablePasser));
+            }
         }
     }
 
@@ -371,19 +423,65 @@ private:
     }
 
     const Position& pos_;
+    std::vector<EvalMark>* marks_;
     Score term_[TERM_NB][COLOR_NB] = {};
 };
 
 }  // namespace
 
-EvalTrace evaluate_trace(const Position& pos) { return Evaluator(pos).run(); }
+EvalTrace evaluate_trace(const Position& pos) {
+    std::vector<EvalMark> marks;
+    EvalTrace t = Evaluator<true>(pos, &marks).run();
+    t.marks = std::move(marks);
+    return t;
+}
 
-int evaluate(const Position& pos) { return Evaluator(pos).run().stm; }
+int evaluate(const Position& pos) { return Evaluator<false>(pos).run().stm; }
 
 const char* term_name(EvalTerm t) {
     static const char* names[TERM_NB] = {"Material", "Piece-square", "Bishop pair", "Pawn structure", "Passed pawns",
                                          "Mobility", "Knight outposts", "Rooks", "King safety", "Endgame"};
     return names[t];
+}
+
+const char* theme_id(Theme t) {
+    static const char* ids[THEME_NB] = {"passed",      "unstoppable", "doubled",     "isolated",    "outpost",
+                                        "rook_open",   "rook_semi",   "rook_seventh", "bishop_pair", "king_shield",
+                                        "king_danger", "inactive",    "mopup"};
+    return ids[t];
+}
+
+std::vector<ThemeSummary> summarize_themes(const EvalTrace& t) {
+    std::map<std::pair<int, int>, ThemeSummary> by;   // (theme, color) in display order
+    for (const EvalMark& m : t.marks) {
+        ThemeSummary& s = by[{m.theme, m.color}];
+        s.theme = m.theme;
+        s.color = m.color;
+        s.mg += m.mg;
+        s.eg += m.eg;
+        if (m.square != SQ_NONE && std::find(s.squares.begin(), s.squares.end(), m.square) == s.squares.end())
+            s.squares.push_back(m.square);
+    }
+    std::vector<ThemeSummary> out;
+    for (auto& [key, s] : by) {
+        (void)key;
+        s.cp = (s.mg * t.phase + s.eg * t.egScale / 128 * (MaxPhase - t.phase)) / MaxPhase;   // same blend as the total
+        out.push_back(std::move(s));
+    }
+    return out;
+}
+
+std::string format_themes(const EvalTrace& t) {
+    std::ostringstream os;
+    for (const ThemeSummary& s : summarize_themes(t)) {
+        os << "theme " << theme_id(s.theme) << (s.color == WHITE ? " white " : " black ");
+        if (s.squares.empty()) os << '-';
+        for (std::size_t i = 0; i < s.squares.size(); ++i)
+            os << (i ? "," : "") << char('a' + file_of(s.squares[i])) << char('1' + rank_of(s.squares[i]));
+        os << " cp " << s.cp << " mg " << s.mg << " eg " << s.eg << '\n';
+    }
+    os << "themes done phase " << t.phase << " scale " << t.egScale << " white " << t.white;
+    return os.str();
 }
 
 std::string format_trace(const EvalTrace& t) {

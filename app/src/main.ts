@@ -13,6 +13,9 @@ import { Analyzer } from "./analysis";
 import { buildPlanShapes, buildShapes, describeLines, planFromShapes, type PlanReport } from "./strategy";
 import { DEFAULT_PARAMS, type HumanParams } from "./humanmode";
 import { pickHumanMove, type HumanChoice } from "./humanplay";
+import { ThemeClient } from "./themeClient";
+import { chipLabel, planFor, rankThemes, roleText, themeBrushes, themeKey, themeShapes, THEME_INFO, type RankedTheme } from "./themes";
+import type { DrawBrushes } from "chessground/draw";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -36,7 +39,11 @@ const ground: Api = Chessground($("board"), {
   movable: { free: false, showDests: true, events: { after: (o, d) => onUserMove(o as Key, d as Key) } },
   draggable: { showGhost: true },
   // 오른쪽 클릭 드래그로 그린 화살표 = "내 계획"
-  drawable: { enabled: true, onChange: (shapes) => onUserShapes(shapes) },
+  drawable: {
+    enabled: true,
+    onChange: (shapes) => onUserShapes(shapes),
+    brushes: themeBrushes() as unknown as DrawBrushes,   // 전략 테마 색(기본 브러시에 더해진다)
+  },
 });
 
 // ───────── 전략 마킹: 엔진 추천 화살표와 내 계획 평가 ─────────
@@ -46,18 +53,26 @@ let analysisFen: string | null = null;   // 지금 분석 중이거나 분석을
 let planActive = false;
 let planTimer: ReturnType<typeof setTimeout> | undefined;
 
+// 보드에 그리는 엔진 도형은 두 층: 추천/계획 화살표(arrowShapes)와 전략 테마 원(themeShapeList). 테마 원이 아래에 깔린다.
+let arrowShapes: DrawShape[] = [];
+let themeShapeList: DrawShape[] = [];
+function renderShapes(): void {
+  ground.setAutoShapes([...themeShapeList, ...arrowShapes]);
+}
+
 const analyzer = new Analyzer(
   () => engine,
   {
     onLines(lines, fen) {
       if (fen !== game.fen || !marksOn) return;
-      if (!planActive) ground.setAutoShapes(buildShapes(fen, lines));
+      if (!planActive) { arrowShapes = buildShapes(fen, lines); renderShapes(); }
       renderCandidates(fen, lines);
     },
     onPlan(report, planInfo, bestInfo, fen) {
       if (fen !== game.fen || !marksOn) return;
       planActive = true;
-      ground.setAutoShapes(buildPlanShapes(fen, planInfo, bestInfo));
+      arrowShapes = buildPlanShapes(fen, planInfo, bestInfo);
+      renderShapes();
       renderPlan(report);
     },
   },
@@ -112,6 +127,104 @@ function applyEngineModeUi(): void {
   if (engineMode !== "human") showHumanNote(null);
 }
 
+// ───────── 전략 테마: 평가 함수가 알려 주는 포지션의 특징을 보드에 표시하고 추천 전략을 문장으로 ─────────
+const THEMES_KEY = "xhess.themes";
+const THEMES_OFF_KEY = "xhess.themesOff";
+let themesOn = (() => { try { return localStorage.getItem(THEMES_KEY) !== "off"; } catch { return true; } })();
+const themesDisabled = new Set<string>((() => { try { return JSON.parse(localStorage.getItem(THEMES_OFF_KEY) ?? "[]") as string[]; } catch { return []; } })());
+let themeFen: string | null = null;
+let rankedThemes: RankedTheme[] = [];
+let themeClient: ThemeClient | null = null;
+
+/** 테마는 대국 엔진과 별개인 Albatross 워커가 계산한다(대국 엔진이 Stockfish 여도 같은 기준). */
+function getThemeClient(): ThemeClient {
+  if (!themeClient) themeClient = new ThemeClient(() => createWorkerTransport(ALBATROSS_URL));
+  return themeClient;
+}
+
+function showThemeNote(text: string | null): void {
+  const el = $("themeNote");
+  el.hidden = text === null;
+  el.textContent = text ?? "";
+}
+
+function clearThemesView(): void {
+  rankedThemes = [];
+  themeShapeList = [];
+  renderShapes();
+  $("planList").replaceChildren();
+  $("themeChips").replaceChildren();
+  showThemeNote(null);
+}
+
+function renderThemes(): void {
+  themeShapeList = themeShapes(rankedThemes, themesDisabled);
+  renderShapes();
+
+  const list = $("planList");
+  list.replaceChildren();
+  for (const item of planFor({ phase: 0, scale: 128, white: 0, themes: rankedThemes }, human)) {
+    const li = document.createElement("li");
+    const role = document.createElement("span");
+    role.className = `role r-${item.theme.role}`;
+    role.textContent = roleText(item.theme.role);
+    li.append(role, item.text);
+    list.append(li);
+  }
+
+  const chips = $("themeChips");
+  chips.replaceChildren();
+  for (const t of rankedThemes.slice(0, 12)) {
+    const { title, value } = chipLabel(t);
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = `chip${themesDisabled.has(themeKey(t)) ? " off" : ""}`;
+    b.style.setProperty("--c", THEME_INFO[t.id].color);
+    b.title = `${roleText(t.role)} · 눌러서 보드 표시 켜기/끄기`;
+    const name = document.createElement("span");
+    name.textContent = title;
+    const v = document.createElement("span");
+    v.className = `v ${t.net >= 0 ? "pos" : "neg"}`;
+    v.textContent = value;
+    b.append(name, v);
+    b.onclick = () => {
+      const k = themeKey(t);
+      if (themesDisabled.has(k)) themesDisabled.delete(k); else themesDisabled.add(k);
+      try { localStorage.setItem(THEMES_OFF_KEY, JSON.stringify([...themesDisabled])); } catch { /* 무시 */ }
+      renderThemes();
+    };
+    chips.append(b);
+  }
+}
+
+/** 내 차례일 때만 현재 포지션의 테마를 구해 표시한다 */
+function refreshThemes(): void {
+  const show = themesOn && game.turn === human && !game.outcome().over;
+  if (!show) {
+    if (themeFen !== null) { themeFen = null; clearThemesView(); }
+    return;
+  }
+  if (themeFen === game.fen) return;
+  const fen = game.fen;
+  themeFen = fen;
+  clearThemesView();
+  getThemeClient().request(fen).then(
+    (report) => {
+      if (!report || fen !== game.fen || !themesOn) return; // 더 새로운 요청에 밀렸거나 그 사이 포지션이 바뀜
+      rankedThemes = rankThemes(report, human);
+      renderThemes();
+    },
+    (err) => { if (fen === game.fen) showThemeNote(`전략 테마를 계산하지 못했습니다 (${err instanceof Error ? err.message : err})`); },
+  );
+}
+
+$<HTMLInputElement>("themesOn").checked = themesOn;
+$<HTMLInputElement>("themesOn").onchange = (e) => {
+  themesOn = (e.target as HTMLInputElement).checked;
+  try { localStorage.setItem(THEMES_KEY, themesOn ? "on" : "off"); } catch { /* 무시 */ }
+  if (!themesOn) { themeFen = null; clearThemesView(); } else sync();
+};
+
 function renderCandidates(fen: string, lines: import("./engine/uci").SearchInfo[]): void {
   const ol = $("cands");
   ol.replaceChildren();
@@ -141,7 +254,8 @@ function renderPlan(r: PlanReport): void {
 function clearMarksView(): void {
   planActive = false;
   clearTimeout(planTimer);
-  ground.setAutoShapes([]);
+  arrowShapes = [];
+  renderShapes();
   ground.setShapes([]);
   $("cands").replaceChildren();
   $("planBox").hidden = true;
@@ -202,6 +316,7 @@ function sync(): void {
   else if (engineBusy) setStatus("엔진이 생각 중…");
   else setStatus(game.turn === human ? "당신의 차례" : "");
   refreshAnalysis();
+  refreshThemes();
 }
 
 function renderMoves(): void {
