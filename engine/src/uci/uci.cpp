@@ -9,6 +9,9 @@
 #include "../core/movegen.h"
 #include "../core/perft.h"
 #include "../eval/evaluation.h"
+#ifdef ALBATROSS_TUNABLE
+#include "../eval/params.h"
+#endif
 
 namespace albatross {
 
@@ -63,10 +66,13 @@ bool Uci::execute(const std::string& line, std::ostream& out) {
     if (!(is >> cmd)) return true;
 
     if (cmd == "uci") {
-        emit(std::string("id name ") + NAME + "\nid author " + AUTHOR +
+        emit(std::string("id name ") + NAME + ID_SUFFIX + "\nid author " + AUTHOR +
              "\noption name Hash type spin default 16 min 1 max " + std::to_string(ALBATROSS_MAX_HASH_MB) +
              "\noption name Clear Hash type button"
              "\noption name MultiPV type spin default 1 min 1 max 32"
+#ifdef ALBATROSS_TUNABLE
+             "\noption name EvalOverride type string default <empty>"
+#endif
              "\nuciok");
     } else if (cmd == "isready") {
         emit("readyok");
@@ -121,6 +127,12 @@ void Uci::cmd_setoption(std::istream& args) {
         }
     } else if (name == "Clear Hash") {
         search_.clear_hash();
+#ifdef ALBATROSS_TUNABLE
+    } else if (name == "EvalOverride") {
+        // "doubledPawn.mg=0,pstKnight[27]=15": testing aid for ablation matches and tuning experiments.
+        std::string error;
+        if (!apply_overrides(value == "<empty>" ? "" : value, &error)) emit("info string EvalOverride rejected: " + error);
+#endif
     } else if (name == "MultiPV") {
         try {
             multiPv_ = std::clamp(int(std::stol(value)), 1, 32);

@@ -8,6 +8,10 @@ rules through the non-standard `status` command (perft-verified move generation,
 
   tools/match.py --a build/albatross --b ../old/albatross-0.2 --games 200 --movetime 50 --concurrency 4
 
+Options can be passed to either engine, e.g. to switch one evaluation weight off in the tunable build
+(ablation: how much is this term worth?):
+  tools/match.py --a build/albatross_tunable --b build/albatross_tunable --b-opt EvalOverride=doubledPawn.mg=0,doubledPawn.eg=0
+
 Elo is the Elo of A relative to B. It is only meaningful at the chosen time control and with enough games:
 the interval shows how much (or how little) the result can be trusted.
 """
@@ -23,12 +27,15 @@ OPENINGS = [
 
 
 class Engine:
-    def __init__(self, exe, hash_mb):
+    def __init__(self, exe, hash_mb, options=()):
         self.p = subprocess.Popen([exe], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                   stderr=subprocess.DEVNULL, text=True, bufsize=1)
         self.send("uci")
         self.read_until(lambda l: l == "uciok")
         self.send(f"setoption name Hash value {hash_mb}")
+        for opt in options:                      # "Name=value", e.g. EvalOverride=doubledPawn.mg=0
+            name, _, value = opt.partition("=")
+            self.send(f"setoption name {name} value {value}")
         self.send("isready")
         self.read_until(lambda l: l == "readyok")
 
@@ -63,9 +70,9 @@ class Engine:
             self.p.kill()
 
 
-def play(exe_white, exe_black, opening, movetime, hash_mb, max_plies, oracle_exe):
-    """Returns (result for white: 1 / 0.5 / 0, termination)."""
-    w, b, oracle = Engine(exe_white, hash_mb), Engine(exe_black, hash_mb), Engine(oracle_exe, 1)
+def play(white, black, opening, movetime, hash_mb, max_plies, oracle_exe):
+    """white/black are (executable, options) pairs. Returns (result for white: 1 / 0.5 / 0, termination)."""
+    w, b, oracle = Engine(white[0], hash_mb, white[1]), Engine(black[0], hash_mb, black[1]), Engine(oracle_exe, 1)
     moves = opening.split()
     try:
         for ply in range(len(moves), max_plies):
@@ -108,6 +115,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--a", required=True, help="engine under test")
     ap.add_argument("--b", required=True, help="reference engine")
+    ap.add_argument("--a-opt", action="append", default=[], metavar="NAME=VALUE", help="UCI option for engine A (repeatable)")
+    ap.add_argument("--b-opt", action="append", default=[], metavar="NAME=VALUE", help="UCI option for engine B (repeatable)")
     ap.add_argument("--games", type=int, default=100)
     ap.add_argument("--movetime", type=int, default=50, help="ms per move")
     ap.add_argument("--hash", type=int, default=16)
@@ -127,7 +136,8 @@ def main():
 
     def run(job):
         g, opening, a_white = job
-        white, black = (args.a, args.b) if a_white else (args.b, args.a)
+        a, b = (args.a, args.a_opt), (args.b, args.b_opt)
+        white, black = (a, b) if a_white else (b, a)
         res, term = play(white, black, opening, args.movetime, args.hash, args.max_plies, args.a)
         return g, (res if a_white else 1 - res), term
 

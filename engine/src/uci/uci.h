@@ -30,6 +30,11 @@ public:
 
     static constexpr const char* NAME = "Albatross 0.4.1-position-sense";
     static constexpr const char* AUTHOR = "Xhess";
+#ifdef ALBATROSS_TUNABLE
+    static constexpr const char* ID_SUFFIX = " (tunable)";   // a testing build: weights can be overridden
+#else
+    static constexpr const char* ID_SUFFIX = "";
+#endif
 
 private:
     void cmd_setoption(std::istream& args);
