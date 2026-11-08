@@ -58,3 +58,11 @@ TEST(uci_eval_command_prints_the_breakdown) {
     CHECK(contains(out, "side to move"));
     CHECK(contains(run("uci\n"), "id name Albatross 0.4"));
 }
+
+TEST(uci_themes_command) {
+    const std::string out = run("position fen k7/8/8/4P3/8/8/8/4K3 w - - 0 1\nthemes\nquit\n");
+    CHECK(contains(out, "theme passed white e5 cp "));
+    CHECK(contains(out, "themes done phase 0 scale 128 white "));
+    // The standard start position has no themes at all except the (empty-handed) king shields? It must at least finish.
+    CHECK(contains(run("position startpos\nthemes\nquit\n"), "themes done phase 24"));
+}

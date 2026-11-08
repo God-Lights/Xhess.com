@@ -266,3 +266,200 @@ TEST(eval_trace_formatting) {
     CHECK(s.find("Final evaluation: +0.00") != std::string::npos);
     CHECK(s.find("Phase 24/24") != std::string::npos);
 }
+
+// ---- Strategic themes (display-only marks collected by evaluate_trace) ----
+
+namespace {
+
+std::vector<ThemeSummary> themes_of(const char* fen) {
+    Position p;
+    const bool ok = p.set(fen);
+    CHECK(ok);
+    return summarize_themes(evaluate_trace(p));
+}
+
+const ThemeSummary* find_theme(const std::vector<ThemeSummary>& v, Theme t, Color c) {
+    for (const ThemeSummary& s : v)
+        if (s.theme == t && s.color == c) return &s;
+    return nullptr;
+}
+
+std::string squares_text(const ThemeSummary* s) {
+    std::string out;
+    if (!s) return "<none>";
+    for (Square q : s->squares) out += std::string(out.empty() ? "" : ",") + char('a' + file_of(q)) + char('1' + rank_of(q));
+    return out;
+}
+
+}  // namespace
+
+TEST(themes_passed_and_unstoppable_pawns) {
+    const auto t = themes_of("k7/8/8/4P3/8/8/8/4K3 w - - 0 1");
+    CHECK_EQ(squares_text(find_theme(t, THEME_PASSED, WHITE)), std::string("e5"));
+    CHECK(find_theme(t, THEME_PASSED, WHITE)->cp > 0);
+    // Bare kings and one far-away pawn: phase 0, so the value is the full endgame bonus.
+    CHECK_EQ(squares_text(find_theme(t, THEME_UNSTOPPABLE, WHITE)), std::string("e5"));
+    CHECK_EQ(find_theme(t, THEME_UNSTOPPABLE, WHITE)->cp, 450);
+    CHECK(find_theme(t, THEME_PASSED, BLACK) == nullptr);
+    // A pawn the black king can catch is passed but not unstoppable.
+    CHECK(find_theme(themes_of("8/3k4/8/4P3/8/8/8/4K3 w - - 0 1"), THEME_UNSTOPPABLE, WHITE) == nullptr);
+    // A guarded pawn is not passed at all.
+    CHECK(find_theme(themes_of("4k3/8/3p4/4P3/8/8/8/4K3 w - - 0 1"), THEME_PASSED, WHITE) == nullptr);
+}
+
+TEST(themes_doubled_and_isolated_pawns) {
+    const auto t = themes_of("4k3/8/8/8/8/2P5/2P5/4K3 w - - 0 1");
+    CHECK_EQ(squares_text(find_theme(t, THEME_DOUBLED, WHITE)), std::string("c2"));        // the rear pawn
+    CHECK_EQ(squares_text(find_theme(t, THEME_ISOLATED, WHITE)), std::string("c2,c3"));
+    CHECK(find_theme(t, THEME_DOUBLED, WHITE)->cp < 0 && find_theme(t, THEME_ISOLATED, WHITE)->cp < 0);
+    CHECK(find_theme(themes_of("4k3/8/8/8/8/1P6/2P5/4K3 w - - 0 1"), THEME_DOUBLED, WHITE) == nullptr);
+    CHECK(find_theme(themes_of("4k3/8/8/8/8/1P6/2P5/4K3 w - - 0 1"), THEME_ISOLATED, WHITE) == nullptr);
+}
+
+TEST(themes_outposts_and_rooks) {
+    CHECK_EQ(squares_text(find_theme(themes_of("4k3/8/8/3N4/2P5/8/8/4K3 w - - 0 1"), THEME_OUTPOST, WHITE)), std::string("d5"));
+    CHECK(find_theme(themes_of("4k3/4p3/8/3N4/2P5/8/8/4K3 w - - 0 1"), THEME_OUTPOST, WHITE) == nullptr);
+
+    const auto seventh = themes_of("7k/4R3/8/8/8/8/8/5K2 w - - 0 1");   // open file and 7th rank
+    CHECK_EQ(squares_text(find_theme(seventh, THEME_ROOK_OPEN, WHITE)), std::string("e7"));
+    CHECK_EQ(squares_text(find_theme(seventh, THEME_ROOK_SEVENTH, WHITE)), std::string("e7"));
+    const auto semi = themes_of("4k3/4p3/8/8/8/8/8/4RK2 w - - 0 1");    // only an enemy pawn on the file
+    CHECK_EQ(squares_text(find_theme(semi, THEME_ROOK_SEMI, WHITE)), std::string("e1"));
+    CHECK(find_theme(semi, THEME_ROOK_OPEN, WHITE) == nullptr);
+}
+
+TEST(themes_bishop_pair_and_inactive_pieces) {
+    const auto pair = themes_of("4k3/8/8/8/8/8/8/2B1KB2 w - - 0 1");
+    CHECK_EQ(squares_text(find_theme(pair, THEME_BISHOP_PAIR, WHITE)), std::string("c1,f1"));
+    CHECK(find_theme(pair, THEME_BISHOP_PAIR, WHITE)->cp > 0);
+    CHECK(find_theme(themes_of("4k3/8/8/8/8/8/8/2B1K3 w - - 0 1"), THEME_BISHOP_PAIR, WHITE) == nullptr);
+
+    // Bishop a2 has no safe square (own king b1, own pawn b3): out of play.
+    const auto stuck = themes_of("4k3/8/8/8/8/1P6/B7/1K6 w - - 0 1");
+    CHECK_EQ(squares_text(find_theme(stuck, THEME_INACTIVE, WHITE)), std::string("a2"));
+    CHECK(find_theme(stuck, THEME_INACTIVE, WHITE)->cp < 0);
+    // Back-rank pieces at the start are not "inactive", they just have not developed yet.
+    CHECK(find_theme(themes_of(Position::START_FEN), THEME_INACTIVE, WHITE) == nullptr);
+}
+
+TEST(themes_king_shield_and_danger) {
+    const auto shield = themes_of("4k3/8/8/8/8/8/5P1P/6K1 w - - 0 1");
+    CHECK_EQ(squares_text(find_theme(shield, THEME_KING_SHIELD, WHITE)), std::string("g2"));  // the hole in front of the king
+    // The shield is a middlegame term: its middlegame value is negative, while with only kings and pawns left
+    // (phase 0) it correctly does not count in the blended value.
+    CHECK_EQ(find_theme(shield, THEME_KING_SHIELD, WHITE)->mg, -22);   // hole (-12) + open g-file (-10)
+    CHECK_EQ(find_theme(shield, THEME_KING_SHIELD, WHITE)->cp, 0);
+    CHECK(find_theme(themes_of("4k3/8/8/8/8/8/5P1P/q5K1 w - - 0 1"), THEME_KING_SHIELD, WHITE)->cp < 0);   // with a queen on the board it counts
+    // The bare black king has a hole on all three files in front of it.
+    CHECK_EQ(find_theme(shield, THEME_KING_SHIELD, BLACK)->squares.size(), std::size_t(3));
+
+    const auto danger = themes_of("4k3/8/8/6q1/8/5n2/5PPP/6K1 w - - 0 1");
+    const ThemeSummary* d = find_theme(danger, THEME_KING_DANGER, WHITE);
+    CHECK(d != nullptr);
+    if (d) {
+        CHECK_EQ(squares_text(d), std::string("f3,g5"));   // the attackers, knights before queens
+        CHECK(d->mg < 0);
+    }
+    CHECK(find_theme(danger, THEME_KING_DANGER, BLACK) == nullptr);
+}
+
+TEST(themes_mopup_marks_the_lone_king) {
+    const auto t = themes_of("k7/8/1K6/8/8/8/8/1Q6 w - - 0 1");
+    CHECK_EQ(squares_text(find_theme(t, THEME_MOPUP, WHITE)), std::string("a8"));
+    CHECK(find_theme(t, THEME_MOPUP, WHITE)->cp > 0);
+    CHECK(find_theme(themes_of("k7/p7/8/8/8/8/8/1Q2K3 w - - 0 1"), THEME_MOPUP, WHITE) == nullptr);
+}
+
+TEST(themes_add_up_to_the_evaluation_terms) {
+    // Terms whose every contribution is also marked must match the marks exactly (mg and eg).
+    const char* fens[] = {
+        Position::START_FEN,
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+        "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+        "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1",
+        "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10",
+        "k7/8/1K6/4P3/8/8/8/1Q6 w - - 0 1",
+        "4k3/8/8/6q1/8/5n2/5PPP/6K1 w - - 0 1",
+    };
+    struct Link { EvalTerm term; std::vector<Theme> themes; };
+    const Link links[] = {
+        {TERM_PASSED, {THEME_PASSED}},
+        {TERM_KNIGHTS, {THEME_OUTPOST}},
+        {TERM_ROOKS, {THEME_ROOK_OPEN, THEME_ROOK_SEMI, THEME_ROOK_SEVENTH}},
+        {TERM_IMBALANCE, {THEME_BISHOP_PAIR}},
+        {TERM_ENDGAME, {THEME_UNSTOPPABLE, THEME_MOPUP}},
+    };
+    for (const char* f : fens) {
+        Position p;
+        CHECK(p.set(f));
+        const EvalTrace tr = evaluate_trace(p);
+        const auto sums = summarize_themes(tr);
+        for (Color c : {WHITE, BLACK})
+            for (const Link& l : links) {
+                int mg = 0, eg = 0;
+                for (Theme th : l.themes)
+                    if (const ThemeSummary* s = find_theme(sums, th, c)) { mg += s->mg; eg += s->eg; }
+                CHECK_EQ(mg, tr.term[l.term][c].mg);
+                CHECK_EQ(eg, tr.term[l.term][c].eg);
+            }
+    }
+}
+
+TEST(themes_are_color_symmetric) {
+    const char* fens[] = {
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+        "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+        "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10",
+        "4k3/8/8/6q1/8/5n2/5PPP/6K1 w - - 0 1",
+    };
+    auto flip = [](const std::string& squares) {   // mirror the ranks of "a1,h8"
+        std::string out;
+        for (std::size_t i = 0; i < squares.size(); ++i)
+            out += (squares[i] >= '1' && squares[i] <= '8') ? char('9' - (squares[i] - '0')) : squares[i];
+        return out;
+    };
+    for (const char* f : fens) {
+        const auto a = themes_of(f);
+        const auto b = themes_of(mirror_fen(f).c_str());
+        CHECK_EQ(a.size(), b.size());
+        for (const ThemeSummary& s : a) {
+            const ThemeSummary* m = find_theme(b, s.theme, ~s.color);
+            CHECK(m != nullptr);
+            if (!m) continue;
+            CHECK_EQ(m->cp, s.cp);
+            // Same set of squares, mirrored (order may differ, so compare sorted).
+            std::string x = flip(squares_text(&s)), y = squares_text(m);
+            auto sorted = [](std::string v) {
+                std::vector<std::string> parts;
+                std::stringstream ss(v);
+                for (std::string p; std::getline(ss, p, ',');) parts.push_back(p);
+                std::sort(parts.begin(), parts.end());
+                std::string o;
+                for (auto& p : parts) o += p + ",";
+                return o;
+            };
+            CHECK_EQ(sorted(x), sorted(y));
+        }
+    }
+}
+
+TEST(themes_do_not_change_the_score) {
+    const char* fens[] = {Position::START_FEN, "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+                          "k7/8/1K6/4P3/8/8/8/1Q6 w - - 0 1"};
+    for (const char* f : fens) {
+        Position p;
+        CHECK(p.set(f));
+        const EvalTrace tr = evaluate_trace(p);
+        CHECK_EQ(tr.stm, evaluate(p));
+    }
+}
+
+TEST(themes_output_format) {
+    Position p;
+    CHECK(p.set("k7/8/8/4P3/8/8/8/4K3 w - - 0 1"));
+    const std::string out = format_themes(evaluate_trace(p));
+    CHECK(out.find("theme passed white e5 cp ") != std::string::npos);
+    CHECK(out.find("theme unstoppable white e5 cp 450 mg 0 eg 450") != std::string::npos);
+    CHECK(out.find("themes done phase 0 scale 128 white ") != std::string::npos);
+    CHECK_EQ(std::string(theme_id(THEME_KING_SHIELD)), std::string("king_shield"));
+}

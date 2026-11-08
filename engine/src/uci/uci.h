@@ -28,7 +28,7 @@ public:
     // Returns false when the engine should quit.
     bool execute(const std::string& line, std::ostream& out);
 
-    static constexpr const char* NAME = "Albatross 0.4.0-position-sense";
+    static constexpr const char* NAME = "Albatross 0.4.1-position-sense";
     static constexpr const char* AUTHOR = "Xhess";
 
 private:

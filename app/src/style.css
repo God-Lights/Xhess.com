@@ -49,3 +49,13 @@ button { cursor:pointer; flex:1 1 40%; } button:hover { background:#4a4642; }
 .human-note.t-speculative { border-color:#ffca28; } .human-note.t-speculative b { color:#ffca28; }
 .human-note.t-blunder, .human-note.t-mistake { border-color:#ef5350; } .human-note.t-blunder b, .human-note.t-mistake b { color:#ef5350; }
 .human-note .sub { color:var(--muted); }
+.themes { border-top:1px solid #444; padding-top:10px; margin-bottom:10px; font-size:13px; }
+.plan-list { margin:0 0 8px; padding:0; list-style:none; }
+.plan-list li { margin:4px 0; line-height:1.45; }
+.role { display:inline-block; font-size:11px; font-weight:700; padding:1px 6px; border-radius:9px; margin-right:6px; color:#10140a; }
+.r-asset { background:#9ccc65; } .r-opportunity { background:#4dd0e1; } .r-liability { background:#ffb74d; } .r-threat { background:#ef5350; color:#fff; }
+.chips { display:flex; flex-wrap:wrap; gap:5px; }
+.chip { flex:none; display:inline-flex; gap:6px; align-items:baseline; padding:3px 9px; border:1px solid #555; border-left:4px solid var(--c); border-radius:6px;
+  background:#3a3835; color:var(--fg); font-size:12px; cursor:pointer; }
+.chip:hover { background:#4a4642; } .chip.off { opacity:.4; text-decoration:line-through; }
+.chip .v { font-weight:700; } .chip .v.pos { color:#9ccc65; } .chip .v.neg { color:#ef9a9a; }
