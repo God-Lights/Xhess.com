@@ -484,7 +484,7 @@ async function startEngine(): Promise<void> {
       candidate = new UciEngine(createWorkerTransport(ALBATROSS_URL));
       await withTimeout(candidate.init(), 20000);
       engine = candidate;
-      label = "Albatross 0.4 (WASM, 자체 엔진)";
+      label = "Albatross 0.5 (WASM, 자체 엔진)";
     } catch (e) {
       candidate?.quit();
       console.warn("albatross unavailable", e);

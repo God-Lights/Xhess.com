@@ -56,7 +56,7 @@ TEST(uci_eval_command_prints_the_breakdown) {
     CHECK(contains(out, "Passed pawns"));
     CHECK(contains(out, "Final evaluation:"));
     CHECK(contains(out, "side to move"));
-    CHECK(contains(run("uci\n"), "id name Albatross 0.4"));
+    CHECK(contains(run("uci\n"), "id name Albatross 0.5"));
 }
 
 TEST(uci_themes_command) {
