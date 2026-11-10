@@ -15,138 +15,38 @@
 #include <sstream>
 
 #include "evaluation.h"
+#include "params.h"
+#include "score.h"
 
 namespace albatross {
 
 namespace {
 
-struct Score {
-    int mg = 0;
-    int eg = 0;
-    Score& operator+=(Score o) { mg += o.mg; eg += o.eg; return *this; }
-    Score& operator-=(Score o) { mg -= o.mg; eg -= o.eg; return *this; }
-};
-constexpr Score S(int mg, int eg) { return Score{mg, eg}; }
-inline Score operator*(Score s, int k) { return Score{s.mg * k, s.eg * k}; }
-
-// Piece values: pawns are worth more in the endgame, minor pieces slightly less.
-constexpr Score MaterialValue[PIECE_TYPE_NB] = {S(0, 0), S(100, 120), S(320, 300), S(330, 320), S(500, 520), S(900, 920), S(0, 0)};
-
-// clang-format off
-constexpr int PawnMg[64] = {
-      0,   0,   0,   0,   0,   0,   0,   0,
-      0,   0,   0, -10, -10,   0,   0,   0,
-      0,   0,   5,   5,   5,   5,   0,   0,
-      0,   0,   5,  20,  20,   5,   0,   0,
-      5,   5,  10,  25,  25,  10,   5,   5,
-     10,  10,  20,  30,  30,  20,  10,  10,
-     50,  50,  50,  50,  50,  50,  50,  50,
-      0,   0,   0,   0,   0,   0,   0,   0};
-
-// In the endgame a pawn's value is mostly how far it has advanced.
-constexpr int PawnEg[64] = {
-      0,   0,   0,   0,   0,   0,   0,   0,
-      0,   0,   0,   0,   0,   0,   0,   0,
-      5,   5,   5,   5,   5,   5,   5,   5,
-     10,  10,  10,  10,  10,  10,  10,  10,
-     20,  20,  20,  20,  20,  20,  20,  20,
-     40,  40,  40,  40,  40,  40,  40,  40,
-     70,  70,  70,  70,  70,  70,  70,  70,
-      0,   0,   0,   0,   0,   0,   0,   0};
-
-constexpr int KnightPst[64] = {
-    -50, -40, -30, -30, -30, -30, -40, -50,
-    -40, -20,   0,   5,   5,   0, -20, -40,
-    -30,   5,  10,  15,  15,  10,   5, -30,
-    -30,   0,  15,  20,  20,  15,   0, -30,
-    -30,   5,  15,  20,  20,  15,   5, -30,
-    -30,   0,  10,  15,  15,  10,   0, -30,
-    -40, -20,   0,   0,   0,   0, -20, -40,
-    -50, -40, -30, -30, -30, -30, -40, -50};
-
-constexpr int BishopPst[64] = {
-    -20, -10, -10, -10, -10, -10, -10, -20,
-    -10,   5,   0,   0,   0,   0,   5, -10,
-    -10,  10,  10,  10,  10,  10,  10, -10,
-    -10,   0,  10,  10,  10,  10,   0, -10,
-    -10,   5,   5,  10,  10,   5,   5, -10,
-    -10,   0,   5,  10,  10,   5,   0, -10,
-    -10,   0,   0,   0,   0,   0,   0, -10,
-    -20, -10, -10, -10, -10, -10, -10, -20};
-
-constexpr int RookPst[64] = {
-      0,   0,   0,   5,   5,   0,   0,   0,
-     -5,   0,   0,   0,   0,   0,   0,  -5,
-     -5,   0,   0,   0,   0,   0,   0,  -5,
-     -5,   0,   0,   0,   0,   0,   0,  -5,
-     -5,   0,   0,   0,   0,   0,   0,  -5,
-     -5,   0,   0,   0,   0,   0,   0,  -5,
-      5,  10,  10,  10,  10,  10,  10,   5,
-      0,   0,   0,   0,   0,   0,   0,   0};
-
-constexpr int QueenPst[64] = {
-    -20, -10, -10,  -5,  -5, -10, -10, -20,
-    -10,   0,   5,   0,   0,   0,   0, -10,
-    -10,   5,   5,   5,   5,   5,   0, -10,
-      0,   0,   5,   5,   5,   5,   0,  -5,
-     -5,   0,   5,   5,   5,   5,   0,  -5,
-    -10,   0,   5,   5,   5,   5,   0, -10,
-    -10,   0,   0,   0,   0,   0,   0, -10,
-    -20, -10, -10,  -5,  -5, -10, -10, -20};
-
-constexpr int KingMg[64] = {
-     20,  30,  10,   0,   0,  10,  30,  20,
-     20,  20,   0,   0,   0,   0,  20,  20,
-    -10, -20, -20, -20, -20, -20, -20, -10,
-    -20, -30, -30, -40, -40, -30, -30, -20,
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -30, -40, -40, -50, -50, -40, -40, -30};
-
-constexpr int KingEg[64] = {
-    -50, -30, -30, -30, -30, -30, -30, -50,
-    -30, -30,   0,   0,   0,   0, -30, -30,
-    -30, -10,  20,  30,  30,  20, -10, -30,
-    -30, -10,  30,  40,  40,  30, -10, -30,
-    -30, -10,  30,  40,  40,  30, -10, -30,
-    -30, -10,  20,  30,  30,  20, -10, -30,
-    -30, -30,   0,   0,   0,   0, -30, -30,
-    -50, -30, -30, -30, -30, -30, -30, -50};
-// clang-format on
-
-constexpr const int* PstMg[PIECE_TYPE_NB] = {nullptr, PawnMg, KnightPst, BishopPst, RookPst, QueenPst, KingMg};
-constexpr const int* PstEg[PIECE_TYPE_NB] = {nullptr, PawnEg, KnightPst, BishopPst, RookPst, QueenPst, KingEg};
-
+// Game phase weights: 24 at the starting position, 0 with only kings and pawns. (Not tuned.)
 constexpr int PhaseWeight[PIECE_TYPE_NB] = {0, 0, 1, 1, 2, 4, 0};
 constexpr int MaxPhase = 24;
 
-// ---- weights ----
-constexpr Score DoubledPawn = S(-8, -18);
-constexpr Score IsolatedPawn = S(-12, -16);
-constexpr int SupportedPawnMg[8] = {0, 0, 4, 6, 10, 18, 30, 0};   // by relative rank
-constexpr int PhalanxPawnMg[8] = {0, 0, 2, 4, 8, 14, 24, 0};
-constexpr int PassedMg[8] = {0, 2, 8, 18, 35, 65, 110, 0};
-constexpr int PassedEg[8] = {0, 6, 16, 35, 70, 125, 200, 0};
-
-constexpr Score BishopPair = S(30, 50);
-constexpr Score KnightOutpost = S(22, 12);
-constexpr Score RookOpenFile = S(25, 15);
-constexpr Score RookSemiOpenFile = S(12, 10);
-constexpr Score RookOnSeventh = S(15, 25);
-
-struct MobilityParam { int base; Score weight; };
-constexpr MobilityParam Mobility[PIECE_TYPE_NB] = {
-    {0, S(0, 0)}, {0, S(0, 0)}, {4, S(4, 4)}, {6, S(4, 5)}, {6, S(2, 4)}, {12, S(1, 2)}, {0, S(0, 0)}};
-
-constexpr int KingAttackUnit[PIECE_TYPE_NB] = {0, 0, 2, 2, 3, 5, 0};
-constexpr int ShieldNear = 10;    // own pawn directly in front of the king's files
-constexpr int ShieldFar = 4;      // own pawn two ranks in front
-constexpr int ShieldMissing = -12;
-constexpr int KingFileOpen = -10;      // no pawns at all on a file next to the king
-constexpr int KingFileSemiOpen = -6;   // only enemy pawns on it
-
-constexpr int UnstoppablePasser = 450;
+// All weights come from params.def through EvalP (a constexpr object in the normal build).
+const int* pstMg(PieceType pt) {
+    switch (pt) {
+        case PAWN: return EvalP.pstPawnMg;
+        case KNIGHT: return EvalP.pstKnight;
+        case BISHOP: return EvalP.pstBishop;
+        case ROOK: return EvalP.pstRook;
+        case QUEEN: return EvalP.pstQueen;
+        default: return EvalP.pstKingMg;
+    }
+}
+const int* pstEg(PieceType pt) {
+    switch (pt) {
+        case PAWN: return EvalP.pstPawnEg;
+        case KNIGHT: return EvalP.pstKnight;
+        case BISHOP: return EvalP.pstBishop;
+        case ROOK: return EvalP.pstRook;
+        case QUEEN: return EvalP.pstQueen;
+        default: return EvalP.pstKingEg;
+    }
+}
 
 // ---- bitboard helpers ----
 struct Masks {
@@ -237,14 +137,14 @@ private:
             const PieceType pt = PieceType(t);
             for (Bitboard b = pos_.pieces(c, pt); b;) {
                 const Square s = pop_lsb(b);
-                add(TERM_MATERIAL, c, MaterialValue[pt]);
-                add(TERM_PST, c, S(PstMg[pt][s ^ flip], PstEg[pt][s ^ flip]));
+                add(TERM_MATERIAL, c, S(EvalP.materialMg[pt], EvalP.materialEg[pt]));
+                add(TERM_PST, c, S(pstMg(pt)[s ^ flip], pstEg(pt)[s ^ flip]));
             }
         }
         if (popcount(pos_.pieces(c, BISHOP)) >= 2) {
-            add(TERM_IMBALANCE, c, BishopPair);
+            add(TERM_IMBALANCE, c, EvalP.bishopPair);
             bool first = true;  // the first bishop carries the value, the second only marks its square
-            for (Bitboard b = pos_.pieces(c, BISHOP); b; first = false) mark(THEME_BISHOP_PAIR, c, pop_lsb(b), first ? BishopPair : S(0, 0));
+            for (Bitboard b = pos_.pieces(c, BISHOP); b; first = false) mark(THEME_BISHOP_PAIR, c, pop_lsb(b), first ? EvalP.bishopPair : S(0, 0));
         }
     }
 
@@ -259,20 +159,20 @@ private:
             const Bitboard bb = square_bb(s);
 
             if (ours & M.ahead[c][s]) {   // another own pawn stands in front of it
-                add(TERM_PAWNS, c, DoubledPawn);
-                mark(THEME_DOUBLED, c, s, DoubledPawn);
+                add(TERM_PAWNS, c, EvalP.doubledPawn);
+                mark(THEME_DOUBLED, c, s, EvalP.doubledPawn);
             }
             if (!(ours & M.adjacent[f])) {
-                add(TERM_PAWNS, c, IsolatedPawn);
-                mark(THEME_ISOLATED, c, s, IsolatedPawn);
+                add(TERM_PAWNS, c, EvalP.isolatedPawn);
+                mark(THEME_ISOLATED, c, s, EvalP.isolatedPawn);
             }
-            if (pawn_attacks(them, s) & ours) add(TERM_PAWNS, c, S(SupportedPawnMg[r], SupportedPawnMg[r] / 2));
-            if ((shift<EAST>(bb) | shift<WEST>(bb)) & ours) add(TERM_PAWNS, c, S(PhalanxPawnMg[r], PhalanxPawnMg[r] / 2));
+            if (pawn_attacks(them, s) & ours) add(TERM_PAWNS, c, S(EvalP.supportedPawnMg[r], EvalP.supportedPawnMg[r] / 2));
+            if ((shift<EAST>(bb) | shift<WEST>(bb)) & ours) add(TERM_PAWNS, c, S(EvalP.phalanxPawnMg[r], EvalP.phalanxPawnMg[r] / 2));
 
             if (!(theirs & M.front[c][s]) && !(ours & M.ahead[c][s])) {
                 // Passed pawn.
                 const Square stop = s + pawn_push(c);
-                Score bonus = S(PassedMg[r], PassedEg[r]);
+                Score bonus = S(EvalP.passedMg[r], EvalP.passedEg[r]);
                 if (pos_.pieces() & square_bb(stop)) bonus = S(bonus.mg / 2, bonus.eg / 2);  // blocked
                 // In the endgame the kings decide: reward our king being close, the enemy king being far.
                 bonus.eg += (distance(theirKing, stop) * 5 - distance(ourKing, stop) * 2) * std::max(r - 1, 0) / 2;
@@ -293,7 +193,7 @@ private:
             for (Bitboard b = pos_.pieces(c, pt); b;) {
                 const Square s = pop_lsb(b);
                 const int count = popcount(attacks_bb(pt, s, occ) & area);
-                const Score mobility = Mobility[pt].weight * (count - Mobility[pt].base);
+                const Score mobility = S(EvalP.mobilityMg[pt], EvalP.mobilityEg[pt]) * (count - EvalP.mobilityBase[pt]);
                 add(TERM_MOBILITY, c, mobility);
 
                 const int f = file_of(s), r = relative_rank(c, s);
@@ -302,18 +202,18 @@ private:
                 if (pt == KNIGHT && r >= 3 && r <= 5 && (pawn_attacks(them, s) & ours) &&
                     !(theirs & M.adjacent[f] & M.front[c][s]))
                 {
-                    add(TERM_KNIGHTS, c, KnightOutpost);  // supported, and no enemy pawn can ever attack it
-                    mark(THEME_OUTPOST, c, s, KnightOutpost);
+                    add(TERM_KNIGHTS, c, EvalP.knightOutpost);  // supported, and no enemy pawn can ever attack it
+                    mark(THEME_OUTPOST, c, s, EvalP.knightOutpost);
                 }
                 if (pt == ROOK) {
                     if (!(ours & M.file[f])) {
                         const bool semi = theirs & M.file[f];
-                        add(TERM_ROOKS, c, semi ? RookSemiOpenFile : RookOpenFile);
-                        mark(semi ? THEME_ROOK_SEMI : THEME_ROOK_OPEN, c, s, semi ? RookSemiOpenFile : RookOpenFile);
+                        add(TERM_ROOKS, c, semi ? EvalP.rookSemiOpenFile : EvalP.rookOpenFile);
+                        mark(semi ? THEME_ROOK_SEMI : THEME_ROOK_OPEN, c, s, semi ? EvalP.rookSemiOpenFile : EvalP.rookOpenFile);
                     }
                     if (r == 6) {
-                        add(TERM_ROOKS, c, RookOnSeventh);
-                        mark(THEME_ROOK_SEVENTH, c, s, RookOnSeventh);
+                        add(TERM_ROOKS, c, EvalP.rookOnSeventh);
+                        mark(THEME_ROOK_SEVENTH, c, s, EvalP.rookOnSeventh);
                     }
                 }
             }
@@ -333,13 +233,13 @@ private:
             const int r1 = kr + dir, r2 = kr + 2 * dir;
             const bool near = r1 >= 0 && r1 < 8 && (ours & square_bb(make_square(f, r1)));
             const bool far = r2 >= 0 && r2 < 8 && (ours & square_bb(make_square(f, r2)));
-            const int fileOpen = !(ours & M.file[f]) ? ((theirs & M.file[f]) ? KingFileSemiOpen : KingFileOpen) : 0;
-            if (near) shield += ShieldNear;
-            else if (far) shield += ShieldFar;
+            const int fileOpen = !(ours & M.file[f]) ? ((theirs & M.file[f]) ? EvalP.kingFileSemiOpen : EvalP.kingFileOpen) : 0;
+            if (near) shield += EvalP.shieldNear;
+            else if (far) shield += EvalP.shieldFar;
             else {
-                shield += ShieldMissing;
+                shield += EvalP.shieldMissing;
                 // A hole in front of the king (plus an open file if no pawn of ours is left on it).
-                mark(THEME_KING_SHIELD, c, (r1 >= 0 && r1 < 8) ? make_square(f, r1) : ksq, S(ShieldMissing + fileOpen, 0));
+                mark(THEME_KING_SHIELD, c, (r1 >= 0 && r1 < 8) ? make_square(f, r1) : ksq, S(EvalP.shieldMissing + fileOpen, 0));
             }
             shield += fileOpen;
         }
@@ -359,7 +259,7 @@ private:
                         if (attackers < 16) attackerSquares[attackers] = s;
                     }
                     ++attackers;
-                    units += KingAttackUnit[t];
+                    units += EvalP.kingAttackUnit[t];
                     queen |= t == QUEEN;
                 }
             }
@@ -386,7 +286,7 @@ private:
         const int heavy = popcount(pos_.pieces(c, QUEEN)) * 9 + popcount(pos_.pieces(c, ROOK)) * 5 +
                           popcount(pos_.pieces(c, BISHOP)) * 3 + popcount(pos_.pieces(c, KNIGHT)) * 3;
         if (loneKing && heavy >= 5) {
-            const Score mopUp = S(0, 10 * center_distance(theirKing) + 8 * (7 - distance(ourKing, theirKing)));
+            const Score mopUp = S(0, EvalP.mopUpEdge * center_distance(theirKing) + EvalP.mopUpKing * (7 - distance(ourKing, theirKing)));
             add(TERM_ENDGAME, c, mopUp);
             mark(THEME_MOPUP, c, theirKing, mopUp);
         }
@@ -405,8 +305,8 @@ private:
             const bool attackerToMove = pos_.side_to_move() == c;
             // The enemy king needs `king` moves; it moves second if the pawn's side is to move.
             if (attackerToMove ? king >= moves : king > moves) {
-                add(TERM_ENDGAME, c, S(0, UnstoppablePasser));
-                mark(THEME_UNSTOPPABLE, c, s, S(0, UnstoppablePasser));
+                add(TERM_ENDGAME, c, S(0, EvalP.unstoppablePasser));
+                mark(THEME_UNSTOPPABLE, c, s, S(0, EvalP.unstoppablePasser));
             }
         }
     }

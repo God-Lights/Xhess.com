@@ -22,7 +22,7 @@ async function engine() {
   // 1) 핸드셰이크와 옵션
   let e = await engine();
   e.cmd('uci'); e.cmd('isready');
-  check(e.lines.some((l) => l.startsWith('id name Albatross 0.4')), 'id name Albatross 0.4');
+  check(e.lines.some((l) => l.startsWith('id name Albatross 0.5')), 'id name Albatross 0.5');
   check(e.lines.includes('uciok') && e.lines.includes('readyok'), 'uciok / readyok');
   check(e.lines.some((l) => /option name Hash type spin default 16 min 1 max 256/.test(l)), 'Hash 최대 256 MB(브라우저 빌드 제한)');
   check(e.lines.some((l) => /option name MultiPV/.test(l)), 'MultiPV 옵션');

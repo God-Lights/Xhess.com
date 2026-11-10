@@ -1,0 +1,127 @@
+// Evaluation weights of Albatross, the single source of truth. Included several times with different macros
+// (struct definition, registry of tunable parameters), so every entry must be one complete macro call.
+//
+//   SCORE(name, mg, eg)         a pair of middlegame / endgame values
+//   INT(name, value)            one integer
+//   ARRAY(name, size, values..) integers indexed by piece type (0 = none ... 6 = king), relative rank or square
+//
+// Tables are written from White's point of view, rank 1 first and file A first (LERF, A1 = 0); Black uses the
+// vertically mirrored square. The values are the result of the self-play tuning described in
+// engine/docs/0.5-tuning.md (tools/tuner); hand-written starting points before that.
+
+// ---- material (centipawns). The pawn middlegame value is the anchor of the scale and is never tuned ----
+ARRAY(materialMg, 7, 0, 100, 361, 378, 502, 1349, 0)
+ARRAY(materialEg, 7, 0, 82, 299, 340, 593, 960, 0)
+
+// ---- piece-square tables ----
+ARRAY(pstPawnMg, 64,
+       0,    0,    0,    0,    0,    0,    0,    0,
+       0,    0,    0,  -10,  -10,    0,    0,    0,
+       0,    0,    5,    5,    5,    5,    0,    0,
+       0,    0,    5,   20,   20,    5,    0,    0,
+       5,    5,   10,   25,   25,   10,    5,    5,
+      10,   10,   20,   30,   30,   20,   10,   10,
+      50,   50,   50,   50,   50,   50,   50,   50,
+       0,    0,    0,    0,    0,    0,    0,    0,
+)
+ARRAY(pstPawnEg, 64,
+       0,    0,    0,    0,    0,    0,    0,    0,
+       0,    0,    0,    0,    0,    0,    0,    0,
+       5,    5,    5,    5,    5,    5,    5,    5,
+      10,   10,   10,   10,   10,   10,   10,   10,
+      20,   20,   20,   20,   20,   20,   20,   20,
+      40,   40,   40,   40,   40,   40,   40,   40,
+      70,   70,   70,   70,   70,   70,   70,   70,
+       0,    0,    0,    0,    0,    0,    0,    0,
+)
+ARRAY(pstKnight, 64,
+     -50,  -40,  -30,  -30,  -30,  -30,  -40,  -50,
+     -40,  -20,    0,    5,    5,    0,  -20,  -40,
+     -30,    5,   10,   15,   15,   10,    5,  -30,
+     -30,    0,   15,   20,   20,   15,    0,  -30,
+     -30,    5,   15,   20,   20,   15,    5,  -30,
+     -30,    0,   10,   15,   15,   10,    0,  -30,
+     -40,  -20,    0,    0,    0,    0,  -20,  -40,
+     -50,  -40,  -30,  -30,  -30,  -30,  -40,  -50,
+)
+ARRAY(pstBishop, 64,
+     -20,  -10,  -10,  -10,  -10,  -10,  -10,  -20,
+     -10,    5,    0,    0,    0,    0,    5,  -10,
+     -10,   10,   10,   10,   10,   10,   10,  -10,
+     -10,    0,   10,   10,   10,   10,    0,  -10,
+     -10,    5,    5,   10,   10,    5,    5,  -10,
+     -10,    0,    5,   10,   10,    5,    0,  -10,
+     -10,    0,    0,    0,    0,    0,    0,  -10,
+     -20,  -10,  -10,  -10,  -10,  -10,  -10,  -20,
+)
+ARRAY(pstRook, 64,
+       0,    0,    0,    5,    5,    0,    0,    0,
+      -5,    0,    0,    0,    0,    0,    0,   -5,
+      -5,    0,    0,    0,    0,    0,    0,   -5,
+      -5,    0,    0,    0,    0,    0,    0,   -5,
+      -5,    0,    0,    0,    0,    0,    0,   -5,
+      -5,    0,    0,    0,    0,    0,    0,   -5,
+       5,   10,   10,   10,   10,   10,   10,    5,
+       0,    0,    0,    0,    0,    0,    0,    0,
+)
+ARRAY(pstQueen, 64,
+     -20,  -10,  -10,   -5,   -5,  -10,  -10,  -20,
+     -10,    0,    5,    0,    0,    0,    0,  -10,
+     -10,    5,    5,    5,    5,    5,    0,  -10,
+       0,    0,    5,    5,    5,    5,    0,   -5,
+      -5,    0,    5,    5,    5,    5,    0,   -5,
+     -10,    0,    5,    5,    5,    5,    0,  -10,
+     -10,    0,    0,    0,    0,    0,    0,  -10,
+     -20,  -10,  -10,   -5,   -5,  -10,  -10,  -20,
+)
+ARRAY(pstKingMg, 64,
+      20,   30,   10,    0,    0,   10,   30,   20,
+      20,   20,    0,    0,    0,    0,   20,   20,
+     -10,  -20,  -20,  -20,  -20,  -20,  -20,  -10,
+     -20,  -30,  -30,  -40,  -40,  -30,  -30,  -20,
+     -30,  -40,  -40,  -50,  -50,  -40,  -40,  -30,
+     -30,  -40,  -40,  -50,  -50,  -40,  -40,  -30,
+     -30,  -40,  -40,  -50,  -50,  -40,  -40,  -30,
+     -30,  -40,  -40,  -50,  -50,  -40,  -40,  -30,
+)
+ARRAY(pstKingEg, 64,
+     -50,  -30,  -30,  -30,  -30,  -30,  -30,  -50,
+     -30,  -30,    0,    0,    0,    0,  -30,  -30,
+     -30,  -10,   20,   30,   30,   20,  -10,  -30,
+     -30,  -10,   30,   40,   40,   30,  -10,  -30,
+     -30,  -10,   30,   40,   40,   30,  -10,  -30,
+     -30,  -10,   20,   30,   30,   20,  -10,  -30,
+     -30,  -30,    0,    0,    0,    0,  -30,  -30,
+     -50,  -30,  -30,  -30,  -30,  -30,  -30,  -50,
+)
+
+// ---- pawn structure ----
+SCORE(doubledPawn, -8, -18)
+SCORE(isolatedPawn, -12, -16)
+ARRAY(supportedPawnMg, 8, 0, 0, 4, 6, 10, 18, 30, 0)   // by relative rank; the endgame value is half of it
+ARRAY(phalanxPawnMg, 8, 0, 0, 2, 4, 8, 14, 24, 0)
+ARRAY(passedMg, 8, 0, 2, 8, 18, 35, 65, 110, 0)
+ARRAY(passedEg, 8, 0, 6, 16, 35, 70, 125, 200, 0)
+
+// ---- pieces ----
+SCORE(bishopPair, 30, 50)
+SCORE(knightOutpost, 22, 12)
+SCORE(rookOpenFile, 25, 15)
+SCORE(rookSemiOpenFile, 12, 10)
+SCORE(rookOnSeventh, 15, 25)
+ARRAY(mobilityBase, 7, 0, 0, 4, 6, 6, 12, 0)    // safe squares at which the bonus is zero
+ARRAY(mobilityMg, 7, 0, 0, 4, 4, 2, 1, 0)       // bonus per safe square above the base
+ARRAY(mobilityEg, 7, 0, 0, 4, 5, 4, 2, 0)
+
+// ---- king safety ----
+ARRAY(kingAttackUnit, 7, 0, 0, 2, 2, 3, 5, 0)   // not tuned: it enters the score quadratically
+INT(shieldNear, 10)       // own pawn directly in front of the king's files
+INT(shieldFar, 4)         // own pawn two ranks in front
+INT(shieldMissing, -12)
+INT(kingFileOpen, -10)    // no pawns at all on a file next to the king
+INT(kingFileSemiOpen, -6) // only enemy pawns on it
+
+// ---- endgame knowledge ----
+INT(unstoppablePasser, 450)
+INT(mopUpEdge, 10)        // per step the lone enemy king is away from the center
+INT(mopUpKing, 8)         // per step our king is closer to it

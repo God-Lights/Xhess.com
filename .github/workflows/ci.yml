@@ -16,6 +16,15 @@ jobs:
       - run: cmake -S engine -B engine/build -DCMAKE_BUILD_TYPE=Release
       - run: cmake --build engine/build --config Release
       - run: ctest --test-dir engine/build -C Release --output-on-failure
+      # Tuning tools: the script that writes tuned weights into params.def, and a check that the weights the
+      # C++ side dumps are exactly what params.def contains (applying them must change nothing).
+      - run: python3 engine/tools/apply_params_test.py
+      - name: params.def is reproducible from the weights compiled into the tuner
+        if: runner.os == 'Linux'
+        run: |
+          engine/build/albatross_tuner --dump-defaults /tmp/defaults.txt
+          python3 engine/tools/apply_params.py engine/src/eval/params.def /tmp/defaults.txt
+          git diff --exit-code engine/src/eval/params.def
 
   # 브라우저용 엔진(WebAssembly). 새로 빌드한 것과 저장소에 커밋된 배포 파일이 모두 네이티브와
   # 같은 결과(고정 깊이 탐색의 노드 수·점수·수순)를 내는지 확인한다. 엔진 소스를 바꾸고

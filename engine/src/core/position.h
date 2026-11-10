@@ -75,6 +75,10 @@ public:
     bool is_seventyfive_move_draw() const { return st().rule50 >= 150; }  // automatic
     bool is_fivefold_repetition() const { return repetition_count() >= 5; }
 
+    // Releases the spare capacity of the state stack. A position that will only be evaluated (tuning data)
+    // then takes a few hundred bytes instead of several kilobytes.
+    void compact() { st_.shrink_to_fit(); }
+
     // Debug helpers.
     Key compute_key() const;   // recompute the Zobrist key from scratch
     bool is_ok() const;        // board/bitboards/key/checkers consistency

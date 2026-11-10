@@ -6,6 +6,7 @@
 
 #include "core/movegen.h"
 #include "eval/evaluation.h"
+#include "eval/params.h"
 #include "test.h"
 
 using namespace albatross;
@@ -153,7 +154,7 @@ TEST(eval_supported_pawns_get_a_bonus_that_grows_with_rank) {
 
 TEST(eval_passed_pawns_count_and_grow_with_rank) {
     const TermScore passed = white(trace("4k3/8/8/4P3/8/8/8/4K3 w - - 0 1"), TERM_PASSED);
-    CHECK(passed.mg > 0 && passed.eg > 0);
+    CHECK(passed.eg > 0);   // the middlegame bonus of a low passer may be tuned to zero or below
     // A black pawn on d6 (it can capture on e5) means the e-pawn is not passed.
     const TermScore guarded = white(trace("4k3/8/3p4/4P3/8/8/8/4K3 w - - 0 1"), TERM_PASSED);
     CHECK_EQ(guarded.mg, 0);
@@ -163,7 +164,7 @@ TEST(eval_passed_pawns_count_and_grow_with_rank) {
     // A blocked passed pawn is worth less than a free one.
     const TermScore blocked = white(trace("8/8/8/4Pn2/8/8/8/k3K3 w - - 0 1"), TERM_PASSED);   // the knight stands on f5, not in front
     const TermScore blockedFront = white(trace("8/8/4n3/4P3/8/8/8/k3K3 w - - 0 1"), TERM_PASSED);
-    CHECK(blockedFront.mg < blocked.mg);
+    CHECK(blockedFront.eg < blocked.eg);
 }
 
 TEST(eval_passed_pawn_likes_the_own_king_close_and_the_enemy_king_far) {
@@ -176,9 +177,9 @@ TEST(eval_passed_pawn_likes_the_own_king_close_and_the_enemy_king_far) {
 }
 
 TEST(eval_bishop_pair) {
-    CHECK_EQ(white(trace("4k3/8/8/8/8/8/8/2B1KB2 w - - 0 1"), TERM_IMBALANCE).mg, 30);
+    CHECK_EQ(white(trace("4k3/8/8/8/8/8/8/2B1KB2 w - - 0 1"), TERM_IMBALANCE).mg, EvalP.bishopPair.mg);
     CHECK_EQ(white(trace("4k3/8/8/8/8/8/8/2B1K3 w - - 0 1"), TERM_IMBALANCE).mg, 0);
-    CHECK_EQ(black(trace("2b1kb2/8/8/8/8/8/8/4K3 w - - 0 1"), TERM_IMBALANCE).eg, 50);
+    CHECK_EQ(black(trace("2b1kb2/8/8/8/8/8/8/4K3 w - - 0 1"), TERM_IMBALANCE).eg, EvalP.bishopPair.eg);
 }
 
 TEST(eval_rooks_like_open_files_and_the_seventh) {
@@ -200,7 +201,7 @@ TEST(eval_mobility_prefers_active_pieces) {
 
 TEST(eval_knight_outpost) {
     // Nd5 supported by c4; no black pawn can ever attack d5.
-    CHECK_EQ(white(trace("4k3/8/8/3N4/2P5/8/8/4K3 w - - 0 1"), TERM_KNIGHTS).mg, 22);
+    CHECK_EQ(white(trace("4k3/8/8/3N4/2P5/8/8/4K3 w - - 0 1"), TERM_KNIGHTS).mg, EvalP.knightOutpost.mg);
     // A black pawn on e7 can still advance to e6 and chase the knight: no outpost.
     CHECK_EQ(white(trace("4k3/4p3/8/3N4/2P5/8/8/4K3 w - - 0 1"), TERM_KNIGHTS).mg, 0);
     // Unsupported: no outpost.
@@ -238,12 +239,12 @@ TEST(eval_mopup_drives_the_lone_king_to_the_edge) {
 
 TEST(eval_unstoppable_passed_pawn_rule_of_the_square) {
     // The black king is far away: the e-pawn runs through whoever moves.
-    CHECK_EQ(white(trace("k7/8/8/4P3/8/8/8/4K3 w - - 0 1"), TERM_ENDGAME).eg, 450);
-    CHECK_EQ(white(trace("k7/8/8/4P3/8/8/8/4K3 b - - 0 1"), TERM_ENDGAME).eg, 450);
+    CHECK_EQ(white(trace("k7/8/8/4P3/8/8/8/4K3 w - - 0 1"), TERM_ENDGAME).eg, EvalP.unstoppablePasser);
+    CHECK_EQ(white(trace("k7/8/8/4P3/8/8/8/4K3 b - - 0 1"), TERM_ENDGAME).eg, EvalP.unstoppablePasser);
     // The black king stands inside the square and is close enough to catch it.
     CHECK_EQ(white(trace("8/3k4/8/4P3/8/8/8/4K3 w - - 0 1"), TERM_ENDGAME).eg, 0);
     // Tempo matters at the border: pawn on e5 needs 3 moves, a king on b8 needs 3 moves to reach e8.
-    CHECK_EQ(white(trace("1k6/8/8/4P3/8/8/8/4K3 w - - 0 1"), TERM_ENDGAME).eg, 450);  // pawn moves first: it wins the race
+    CHECK_EQ(white(trace("1k6/8/8/4P3/8/8/8/4K3 w - - 0 1"), TERM_ENDGAME).eg, EvalP.unstoppablePasser);  // pawn moves first: it wins the race
     CHECK_EQ(white(trace("1k6/8/8/4P3/8/8/8/4K3 b - - 0 1"), TERM_ENDGAME).eg, 0);    // king moves first: catches it
     // Never when the opponent still has a piece that could stop it.
     CHECK_EQ(white(trace("kn6/8/8/4P3/8/8/8/4K3 w - - 0 1"), TERM_ENDGAME).eg, 0);
@@ -299,7 +300,7 @@ TEST(themes_passed_and_unstoppable_pawns) {
     CHECK(find_theme(t, THEME_PASSED, WHITE)->cp > 0);
     // Bare kings and one far-away pawn: phase 0, so the value is the full endgame bonus.
     CHECK_EQ(squares_text(find_theme(t, THEME_UNSTOPPABLE, WHITE)), std::string("e5"));
-    CHECK_EQ(find_theme(t, THEME_UNSTOPPABLE, WHITE)->cp, 450);
+    CHECK_EQ(find_theme(t, THEME_UNSTOPPABLE, WHITE)->cp, EvalP.unstoppablePasser);
     CHECK(find_theme(t, THEME_PASSED, BLACK) == nullptr);
     // A pawn the black king can catch is passed but not unstoppable.
     CHECK(find_theme(themes_of("8/3k4/8/4P3/8/8/8/4K3 w - - 0 1"), THEME_UNSTOPPABLE, WHITE) == nullptr);
@@ -347,7 +348,7 @@ TEST(themes_king_shield_and_danger) {
     CHECK_EQ(squares_text(find_theme(shield, THEME_KING_SHIELD, WHITE)), std::string("g2"));  // the hole in front of the king
     // The shield is a middlegame term: its middlegame value is negative, while with only kings and pawns left
     // (phase 0) it correctly does not count in the blended value.
-    CHECK_EQ(find_theme(shield, THEME_KING_SHIELD, WHITE)->mg, -22);   // hole (-12) + open g-file (-10)
+    CHECK_EQ(find_theme(shield, THEME_KING_SHIELD, WHITE)->mg, EvalP.shieldMissing + EvalP.kingFileOpen);   // hole + open g-file
     CHECK_EQ(find_theme(shield, THEME_KING_SHIELD, WHITE)->cp, 0);
     CHECK(find_theme(themes_of("4k3/8/8/8/8/8/5P1P/q5K1 w - - 0 1"), THEME_KING_SHIELD, WHITE)->cp < 0);   // with a queen on the board it counts
     // The bare black king has a hole on all three files in front of it.
@@ -459,7 +460,7 @@ TEST(themes_output_format) {
     CHECK(p.set("k7/8/8/4P3/8/8/8/4K3 w - - 0 1"));
     const std::string out = format_themes(evaluate_trace(p));
     CHECK(out.find("theme passed white e5 cp ") != std::string::npos);
-    CHECK(out.find("theme unstoppable white e5 cp 450 mg 0 eg 450") != std::string::npos);
+    CHECK(out.find("theme unstoppable white e5 cp " + std::to_string(EvalP.unstoppablePasser) + " mg 0 eg " + std::to_string(EvalP.unstoppablePasser)) != std::string::npos);
     CHECK(out.find("themes done phase 0 scale 128 white ") != std::string::npos);
     CHECK_EQ(std::string(theme_id(THEME_KING_SHIELD)), std::string("king_shield"));
 }
