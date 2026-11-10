@@ -1,6 +1,6 @@
 [package]
 name = "xhess"
-version = "0.5.0"
+version = "0.5.1"
 description = "Xhess chess"
 edition = "2021"
 
