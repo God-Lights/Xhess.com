@@ -6,7 +6,7 @@ import "chessground/assets/chessground.cburnett.css";
 import "./style.css";
 import { Game, type Color, type Key } from "./game";
 import { UciEngine, type SearchInfo } from "./engine/uci";
-import { ALBATROSS_URL, createWorkerTransport, STOCKFISH_URL } from "./engine/workerTransport";
+import { ALBATROSS_URL, createBlobWorkerTransport, createWorkerTransport, STOCKFISH_URL } from "./engine/workerTransport";
 import { createTauriTransport, isTauri } from "./engine/tauriTransport";
 import type { DrawShape } from "chessground/draw";
 import { Analyzer } from "./analysis";
@@ -138,7 +138,7 @@ let themeClient: ThemeClient | null = null;
 
 /** 테마는 대국 엔진과 별개인 Albatross 워커가 계산한다(대국 엔진이 Stockfish 여도 같은 기준). */
 function getThemeClient(): ThemeClient {
-  if (!themeClient) themeClient = new ThemeClient(() => createWorkerTransport(ALBATROSS_URL));
+  if (!themeClient) themeClient = new ThemeClient(() => createBlobWorkerTransport(ALBATROSS_URL));
   return themeClient;
 }
 
@@ -481,7 +481,7 @@ async function startEngine(): Promise<void> {
     // 자체 엔진(WebAssembly). 다운로드·컴파일에 시간이 걸릴 수 있어 넉넉히 기다리고, 실패하면 Stockfish 로 대신한다.
     let candidate: UciEngine | null = null;
     try {
-      candidate = new UciEngine(createWorkerTransport(ALBATROSS_URL));
+      candidate = new UciEngine(createBlobWorkerTransport(ALBATROSS_URL));
       await withTimeout(candidate.init(), 20000);
       engine = candidate;
       label = "Albatross 0.5 (WASM, 자체 엔진)";
