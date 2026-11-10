@@ -15,14 +15,21 @@
     <div id="app">
       <main class="layout">
         <section class="board-col">
+          <div class="player top">
+            <span class="avatar bot" aria-hidden="true">♞</span>
+            <span class="pinfo"><b id="oppName">엔진</b><small id="oppSub">컴퓨터</small></span>
+          </div>
           <div class="board-wrap">
             <div class="evalbar" title="엔진 평가"><div id="evalFill"></div></div>
             <div id="board" class="board"></div>
           </div>
-          <div id="status" class="status">로딩 중…</div>
+          <div class="player bottom">
+            <span class="avatar me" aria-hidden="true">♔</span>
+            <span class="pinfo"><b>나</b><small id="status" class="status">로딩 중…</small></span>
+          </div>
         </section>
         <aside class="panel">
-          <h1>Xhess</h1>
+          <h1><span class="logo" aria-hidden="true">♞</span>Xhess <small>체스</small></h1>
           <div class="row">
             <label>내 색
               <select id="side"><option value="white">백</option><option value="black">흑</option></select>
@@ -57,7 +64,7 @@
           </div>
           <div id="humanNote" class="human-note" hidden></div>
           <div class="row buttons">
-            <button id="newGame">새 게임</button>
+            <button id="newGame" class="primary">새 게임</button>
             <button id="undo">무르기</button>
             <button id="flip">보드 뒤집기</button>
             <button id="copyPgn">PGN 복사</button>
